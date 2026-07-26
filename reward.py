@@ -45,6 +45,9 @@ class RewardFunction:
             0.33
         """
 
+        if visitation_count <= 0:
+            return 1.0
+
         return self.coverage_weight / visitation_count
 
     def current_penalty(self,motor_currents: Sequence[float],) -> float:
