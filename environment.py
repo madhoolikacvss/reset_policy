@@ -9,11 +9,16 @@ from gymnasium import spaces
 from observation import ObservationBuilder
 from reward import RewardFunction
 from occupancy_grid import OccupancyGrid
-
+from renderer import BoardRenderer  
 
 class ResetPolicyEnv(gym.Env):
 
-    metadata = {"render_modes": []}
+    metadata = {
+        "render_modes": [
+            "human",
+            "rgb_array"
+        ]
+    }
 
     def __init__(
         self,
@@ -22,7 +27,9 @@ class ResetPolicyEnv(gym.Env):
         cube_tracker,
         occupancy_grid: OccupancyGrid,
         reward_function: RewardFunction,
+        max_motor_delta=400,
         action_duration: float = 0.4,
+        render_mode=None,
     ):
 
         super().__init__()
@@ -63,6 +70,11 @@ class ResetPolicyEnv(gym.Env):
             shape=(4,),
             dtype=np.float32,
         )
+        self.render_mode = render_mode
+        if self.render_mode == "human":
+            self.renderer = BoardRenderer()
+        else:
+            self.renderer = None
 
 
 
@@ -122,13 +134,28 @@ class ResetPolicyEnv(gym.Env):
             terminated,
             truncated,
             info,
+            self.render()   
         )
 
 
 
     def render(self):
-        pass
+
+        if self.render_mode is None:
+            return
+
+
+        observation = self.obs_builder.get_observation()
+        self.renderer.render(
+            cube_x=observation.cube_x,
+            cube_y=observation.cube_y,
+            occupancy_grid=self.grid.as_numpy(),
+            coverage=self.grid.coverage(),
+        )
 
 
     def close(self):
+
         self.executor.shutdown()
+        if self.renderer is not None:
+            self.renderer.close()

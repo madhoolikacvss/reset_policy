@@ -45,9 +45,9 @@ class ObservationBuilder:
             raise RuntimeError("Cube not detected")
 
 
-        motor_positions = np.array(self.executor.get_positions())
-        motor_currents = np.array(self.executor.get_currents())
+        motor_positions = np.array(self.executor.read_positions())
 
+        motor_currents = np.array(self.executor.read_currents())
 
         return Observation(
             cube_x=cube_state.x,
