@@ -13,8 +13,8 @@ import time
 from typing import Optional
 
 
-from reset_policy.camera.cameras import CameraPair
-from reset_policy.april_tag.track_apriltag import AprilTagTracker
+from camera.cameras import CameraPair
+from april_tag.track_apriltag import AprilTagTracker
 
 @dataclass
 class CubeState:

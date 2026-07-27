@@ -15,9 +15,10 @@ ObservationBuilder + Reward + OccupancyGrid
 """
 
 from dynamixel_sdk import *
-
-from reset_policy.camera.cameras import CameraPair
-
+import sys
+from pathlib import Path 
+sys.path.append(str(Path(__file__).resolve().parent))
+from camera.cameras import CameraPair
 from april_tag.track_apriltag import AprilTagTracker
 from cube_tracker import CubeTracker
 
@@ -49,7 +50,7 @@ CUBE_TAG_ID = 0
 
 # Dynamixel Configuration
 
-PORT_NAME = "COM5"
+PORT_NAME = "/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT8ISG7I-if00-port0"
 BAUDRATE = 1000000
 
 PROTOCOL_VERSION = 2.0
@@ -162,8 +163,7 @@ def main():
             action = env.action_space.sample()
             print("Action:",action)
 
-            obs, reward, terminated, truncated, info = env.step(action)
-            frame = env.render()
+            obs, reward, terminated, truncated, info,frame = env.step(action)
             if frame is not None:
                 frames.append(frame)
             time.sleep(0.5)
