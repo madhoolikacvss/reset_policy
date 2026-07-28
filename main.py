@@ -50,7 +50,7 @@ CUBE_TAG_ID = 0
 
 # Dynamixel Configuration
 
-PORT_NAME = "/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT8ISG7I-if00-port0"
+PORT_NAME = "/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT89FK0C-if00-port0"
 BAUDRATE = 1000000
 
 PROTOCOL_VERSION = 2.0
@@ -77,11 +77,17 @@ def create_dynamixel_bus():
     if not port.setBaudRate(BAUDRATE):
         raise RuntimeError("Cannot set baudrate")
 
-    print("Dynamixel connected")
-    sync_write = GroupSyncWrite(port,packet,116,4)
+    for m in MOTOR_IDS:
+        model, comm, dxl_error = packet.ping(port, m)
+        print(
+            m,
+            model,
+            packet.getTxRxResult(comm),
+            packet.getRxPacketError(dxl_error),
+        )
 
-
-    return (port,packet,sync_write)
+    sync_write = GroupSyncWrite(port, packet, 116, 4)
+    return (port, packet, sync_write)
 
 
 def main():
