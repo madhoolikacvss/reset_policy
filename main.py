@@ -166,6 +166,7 @@ def main():
             print("Action:",action)
 
             obs, reward, terminated, truncated, info = env.step(action)
+            frame = env.render()
             if frame is not None:
                 frames.append(frame)
             time.sleep(0.5)
