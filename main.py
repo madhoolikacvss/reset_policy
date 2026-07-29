@@ -156,10 +156,6 @@ def main():
 
 
         frames = []
-        frame = env.render()
-
-        if frame is not None:
-            frames.append(frame)
         for step in range(10):
 
             print(f"\nStep {step}")
@@ -169,7 +165,7 @@ def main():
             action = env.action_space.sample()
             print("Action:",action)
 
-            obs, reward, terminated, truncated, info,frame = env.step(action)
+            obs, reward, terminated, truncated, info = env.step(action)
             if frame is not None:
                 frames.append(frame)
             time.sleep(0.5)
@@ -200,7 +196,9 @@ def main():
     except KeyboardInterrupt:
         print("\nInterrupted")
     finally:
-        if executor is not None:
+        if 'env' in locals():
+            env.close()
+        elif executor is not None:
             executor.shutdown()
 
         if cameras is not None:
@@ -208,9 +206,8 @@ def main():
 
         if port is not None:
             port.closePort()
-        print(
-            "Shutdown complete"
-        )
+
+        print("Shutdown complete")
 
 if __name__ == "__main__":
 
