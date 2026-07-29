@@ -4,7 +4,7 @@ from pathlib import Path
 import cv2
 import time
 
-from reset_policy.camera.cameras import CameraPair
+from cameras import CameraPair
 
 SAVE_DIR = Path("calibration_images")
 SAVE_DIR.mkdir(exist_ok=True)

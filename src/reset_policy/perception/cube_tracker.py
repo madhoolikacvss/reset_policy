@@ -13,7 +13,7 @@ import time
 from typing import Optional
 
 
-from camera.cameras import CameraPair
+from cameras import CameraPair
 from april_tag.track_apriltag import AprilTagTracker
 
 @dataclass

@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
 
-from cube_tracker import CubeTracker
-from dynamixel_executor import DynamixelExecutor
+from perception.cube_tracker import CubeTracker
+from control.dynamixel_executor import DynamixelExecutor
 
 
 @dataclass

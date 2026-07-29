@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+
+output.txt
+
+experiments/checkpoints/
+experiments/videos/
+experiments/logs/
+
+*.mp4
+*.png
+
+.vscode/
+.idea/

@@ -10,9 +10,9 @@ Flow:
 import numpy as np
 import torch
 
-from ppo.actor_critic import ActorCritic
-from ppo.rollout_buffer import RolloutBuffer
-from ppo import PPO
+from src.reset_policy.rl import ActorCritic
+from src.reset_policy.rl.rollout_buffer import RolloutBuffer
+from src.reset_policy.rl.ppo import PPO
 
 from pathlib import Path
 

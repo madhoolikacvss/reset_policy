@@ -1,7 +1,7 @@
 import cv2
 
-from reset_policy.camera.cameras import CameraPair
-from track_airtag import AprilTagTracker
+from cameras import CameraPair
+from track_apriltag import AprilTagTracker
 
 
 # SETTINGS

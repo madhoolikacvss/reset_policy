@@ -18,16 +18,16 @@ from dynamixel_sdk import *
 import sys
 from pathlib import Path 
 sys.path.append(str(Path(__file__).resolve().parent))
-from camera.cameras import CameraPair
-from april_tag.track_apriltag import AprilTagTracker
-from cube_tracker import CubeTracker
+from reset_policy.src.reset.perception.cameras import CameraPair
+from reset_policy.src.reset.perception.april_tag.track_apriltag import AprilTagTracker
+from reset_policy.src.reset.perception.cube_tracker import CubeTracker
 
-from dynamixel_executor import DynamixelExecutor
+from reset_policy.src.reset.control.dynamixel_executor import DynamixelExecutor
 
-from occupancy_grid import OccupancyGrid
-from reward import RewardFunction
-from observation import ObservationBuilder
-from environment import ResetPolicyEnv
+from reset_policy.src.reset_policy.environment.occupancy_grid import OccupancyGrid
+from reset_policy.src.reset_policy.environment.reward import RewardFunction
+from reset_policy.src.reset_policy.environment.observation import ObservationBuilder
+from reset_policy.src.reset_policy.environment.environment import ResetPolicyEnv
 
 
 import gymnasium
