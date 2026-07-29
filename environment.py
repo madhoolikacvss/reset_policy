@@ -30,6 +30,9 @@ class ResetPolicyEnv(gym.Env):
         max_motor_delta=400,
         action_duration: float = 0.4,
         render_mode=None,
+        max_steps=100,
+        target_coverage=0.95,
+        max_current=800,
     ):
 
         super().__init__()
@@ -76,6 +79,13 @@ class ResetPolicyEnv(gym.Env):
         else:
             self.renderer = None
 
+        self.max_steps = max_steps
+        self.target_coverage = target_coverage
+        self.max_current = max_current
+
+        self.step_count = 0
+                
+
 
 
     def reset(self,*,seed=None,options=None,):
@@ -85,13 +95,14 @@ class ResetPolicyEnv(gym.Env):
         observation = self.obs_builder.get_observation()
         x = observation.cube_x
         y = observation.cube_y
-
+        self.step_count = 0
         self.grid.visit(x,y,)
         return observation.as_numpy(), {}
 
 
 
     def step(self, action):
+        self.step_count += 1
 
         self.executor.execute(action)
 
@@ -122,12 +133,52 @@ class ResetPolicyEnv(gym.Env):
                 observation.cube_y,
             ),
         }
+        # TODO: move the penalty logic to reward.py
+        truncated = terminated = False
+        truncated = self.step_count >= self.max_steps
+        coverage_done = info["coverage"] >= self.target_coverage
+        if coverage_done:
+            reward+=20
+
+        x_pos = info["cube_position_cm"][0]
+        y_pos = info["cube_position_cm"][1]
+
+        out_of_bounds = (
+            x_pos < 0
+            or x_pos > self.grid.board_width
+            or y_pos < 0
+            or y_pos > self.grid.board_height
+        )
+        if out_of_bounds:
+            reward = -10
+
+        current_limit = any(
+            abs(i) >= self.max_current
+            for i in observation.motor_currents
+        )
+        if current_limit:
+            reward-=10
+
+        if coverage_done or out_of_bounds or current_limit:
+            terminated = True
+
+        if coverage_done:
+            info["termination_reason"] = "coverage"
+
+        elif out_of_bounds:
+            info["termination_reason"] = "out_of_bounds"
+
+        elif current_limit:
+            info["termination_reason"] = "over_current"
+
+        elif truncated:
+            info["termination_reason"] = "max_steps"
 
         return (
             observation.as_numpy(),
             reward_info.total,
-            False,
-            False,
+            terminated,
+            truncated,
             info,
         )
 
