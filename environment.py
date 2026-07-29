@@ -71,7 +71,7 @@ class ResetPolicyEnv(gym.Env):
             dtype=np.float32,
         )
         self.render_mode = render_mode
-        if self.render_mode == "human":
+        if self.render_mode in ("human", "rgb_array"):
             self.renderer = BoardRenderer()
         else:
             self.renderer = None
@@ -83,74 +83,69 @@ class ResetPolicyEnv(gym.Env):
         super().reset(seed=seed)
         self.grid.reset()
         observation = self.obs_builder.get_observation()
-        # cm -> meters
-        x = observation.cube_x / 100.0
-        y = observation.cube_y / 100.0
+        x = observation.cube_x
+        y = observation.cube_y
 
         self.grid.visit(x,y,)
         return observation.as_numpy(), {}
 
 
 
-    def step(self,action,):
+    def step(self, action):
+
         self.executor.execute(action)
+
         time.sleep(self.action_duration)
+
         observation = self.obs_builder.get_observation()
 
-        # Update occupancy grid
-        x = observation.cube_x / 100.0
-        y = observation.cube_y / 100.0
+        x = observation.cube_x
+        y = observation.cube_y
 
-        visits = self.grid.visit(x,y,)
+        visits = self.grid.visit(x, y)
 
         reward_info = self.reward_fn.compute(
             visitation_count=visits,
             motor_currents=observation.motor_currents,
         )
 
-        reward = reward_info.total
-        terminated = False
-        truncated = False
+        if self.render_mode == "human":
+            self.render()
 
         info = {
-            "coverage":
-                self.grid.coverage(),
-            "visits":
-                visits,
-            "coverage_reward":
-                reward_info.coverage_reward,
-            "current_penalty":
-                reward_info.current_penalty,
-            "cube_position_cm":
-                (
-                    observation.cube_x,
-                    observation.cube_y,
-                ),
+            "coverage": self.grid.coverage(),
+            "visits": visits,
+            "coverage_reward": reward_info.coverage_reward,
+            "current_penalty": reward_info.current_penalty,
+            "cube_position_cm": (
+                observation.cube_x,
+                observation.cube_y,
+            ),
         }
 
         return (
             observation.as_numpy(),
-            reward,
-            terminated,
-            truncated,
+            reward_info.total,
+            False,
+            False,
             info,
-            self.render()   
         )
 
 
 
     def render(self):
 
-        if self.render_mode is None:
-            return
-
+        if self.renderer is None:
+            return None
 
         observation = self.obs_builder.get_observation()
-        self.renderer.render(
+
+        return self.renderer.render(
             cube_x=observation.cube_x,
             cube_y=observation.cube_y,
             occupancy_grid=self.grid.as_numpy(),
             coverage=self.grid.coverage(),
+            mode=self.render_mode,
         )
 
 

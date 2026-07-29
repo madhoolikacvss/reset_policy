@@ -76,7 +76,7 @@ class CubeTracker:
 
         return CubeState(
 
-            x=x,
+            x=x, # meetrs
             y=y,
             yaw=yaw,
             detected=True,
