@@ -11,7 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 import time
 from typing import Optional
-
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parent))
 
 from cameras import CameraPair
 from april_tag.track_apriltag import AprilTagTracker

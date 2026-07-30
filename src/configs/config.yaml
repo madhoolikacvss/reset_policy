@@ -1,0 +1,9 @@
+# board_config.yaml
+board:
+  name: "Test Board"
+  dimensions:
+    x_min: 0.035
+    x_max: 0.830
+    y_min: 0.140
+    y_max: 0.654
+  world_tag_position: "top_right"  # or "top_left"

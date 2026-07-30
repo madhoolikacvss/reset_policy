@@ -1,14 +1,19 @@
 import cv2
 
+from pathlib import Path
+import sys
+
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+
 from cameras import CameraPair
 from track_apriltag import AprilTagTracker
 
 
 # SETTINGS
 TAG_SIZE = 0.05      # 50 mm
-
+yaml_path = str(Path(__file__).resolve().parent / "camera_intrinsics.yaml")
 tracker = AprilTagTracker(
-    yaml_file="camera_intrinsics.yaml",
+    yaml_file=yaml_path,
     tag_size=TAG_SIZE,
     world_tag_id=0,
     cube_tag_id=1,

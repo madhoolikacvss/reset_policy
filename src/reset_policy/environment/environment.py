@@ -5,7 +5,9 @@ import gymnasium as gym
 import numpy as np
 
 from gymnasium import spaces
-
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parent))
 from observation import ObservationBuilder
 from reward import RewardFunction
 from occupancy_grid import OccupancyGrid
@@ -97,19 +99,16 @@ class ResetPolicyEnv(gym.Env):
         y = observation.cube_y
         self.step_count = 0
         self.grid.visit(x,y,)
+        self.obs_builder.reset()
         return observation.as_numpy(), {}
-
-
 
     def step(self, action):
         self.step_count += 1
 
         self.executor.execute(action)
-
         time.sleep(self.action_duration)
 
         observation = self.obs_builder.get_observation()
-
         x = observation.cube_x
         y = observation.cube_y
 
@@ -132,13 +131,12 @@ class ResetPolicyEnv(gym.Env):
                 observation.cube_x,
                 observation.cube_y,
             ),
+            "motor_currents": observation.motor_currents,  # Add this
         }
-        # TODO: move the penalty logic to reward.py
+        
         truncated = terminated = False
         truncated = self.step_count >= self.max_steps
         coverage_done = info["coverage"] >= self.target_coverage
-        if coverage_done:
-            reward+=20
 
         x_pos = info["cube_position_cm"][0]
         y_pos = info["cube_position_cm"][1]
@@ -149,39 +147,56 @@ class ResetPolicyEnv(gym.Env):
             or y_pos < 0
             or y_pos > self.grid.board_height
         )
-        if out_of_bounds:
-            reward = -10
 
+        # More conservative current limit
+        # Use 80% of max as warning, 100% as termination
+        current_warning_threshold = self.max_current * 0.8
         current_limit = any(
-            abs(i) >= self.max_current
+            abs(i) >= current_warning_threshold  # More conservative
             for i in observation.motor_currents
         )
-        if current_limit:
-            reward-=10
 
-        if coverage_done or out_of_bounds or current_limit:
-            terminated = True
+        # NEW: Detect current spikes (sudden increases)
+        current_spike = False
+        if hasattr(self, 'prev_currents'):
+            for curr, prev in zip(observation.motor_currents, self.prev_currents):
+                if abs(curr - prev) > 200:  # Sudden increase of 200 mA
+                    current_spike = True
+                    break
+        self.prev_currents = observation.motor_currents
 
+        # TERMINATE on:
+        # 1. Coverage achieved (good)
+        # 2. Out of bounds (bad)
+        # 3. Current limit (bad - taut string)
+        # 4. Current spike (bad - binding/taut)
         if coverage_done:
+            terminated = True
             info["termination_reason"] = "coverage"
-
         elif out_of_bounds:
+            terminated = True
             info["termination_reason"] = "out_of_bounds"
-
         elif current_limit:
+            terminated = True
             info["termination_reason"] = "over_current"
-
+        elif current_spike:
+            terminated = True
+            info["termination_reason"] = "current_spike"
         elif truncated:
             info["termination_reason"] = "max_steps"
 
+        # Return with modified reward if current spike detected
+        reward = reward_info.total
+        if current_spike:
+            reward -= 50.0  # Extra penalty for current spike
+
         return (
             observation.as_numpy(),
-            reward_info.total,
+            reward,
             terminated,
             truncated,
             info,
         )
-
 
 
     def render(self):

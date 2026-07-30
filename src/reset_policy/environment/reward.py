@@ -23,10 +23,13 @@ class RewardFunction:
         self,
         coverage_weight: float = 1.0,
         current_weight: float = 0.001,
+        current_change_weight: float = 0.01
     ):
 
         self.coverage_weight = coverage_weight
         self.current_weight = current_weight
+        self.current_change_weight = current_change_weight 
+        self.prev_currents = None
 
     def coverage_reward(
         self,
@@ -50,24 +53,46 @@ class RewardFunction:
 
         return self.coverage_weight / visitation_count
 
-    def current_penalty(self,motor_currents: Sequence[float],) -> float:
-        #Penalize large motor currents.
+    # reward.py - Modified current_penalty
+
+    def current_change_penalty(self, motor_currents: Sequence[float]) -> float:
+        """Penalize sudden changes in current (indicates binding/taut)."""
+        if self.prev_currents is None:
+            self.prev_currents = motor_currents
+            return 0.0
+        
+        # Calculate change in current for each motor
+        changes = [abs(c - prev) for c, prev in zip(motor_currents, self.prev_currents)]
+        max_change = max(changes)
+        
+        self.prev_currents = motor_currents
+        
+        # Penalize large changes (squared for aggressiveness)
+        return self.current_change_weight * (max_change ** 2)
+
+    def current_penalty(self, motor_currents: Sequence[float]) -> float:
         """
-        we could also have max(currents)
-        or a weighted sum 0.5(max_current) + 0.5(avg of the rest)
+        Penalize large motor currents.
+        Using max current is more sensitive to taut strings than sum.
         """
-        total_current = sum(abs(i) for i in motor_currents)
-        return self.current_weight * total_current
 
-    def compute(self,visitation_count: int,motor_currents: Sequence[float], ) -> RewardBreakdown:
-
-        coverage = self.coverage_reward(visitation_count,)
-
-        current = self.current_penalty(motor_currents,)
-        total = coverage - current
-
+        for id, m in zip([16, 17, 18, 19],motor_currents):
+            print("current for id ", id, "is ", m)
+        #individual motor overload
+        max_current = max(abs(i) for i in motor_currents)
+        
+        # Square the penalty to make it more aggressive for high currents
+        # This creates a much larger penalty when current is high
+        return self.current_weight * (max_current ** 2)
+    def compute(self, visitation_count: int, motor_currents: Sequence[float]) -> RewardBreakdown:
+        coverage = self.coverage_reward(visitation_count)
+        current_penalty = self.current_penalty(motor_currents)
+        change_penalty = self.current_change_penalty(motor_currents)  # NEW
+        
+        total = coverage - current_penalty - change_penalty
+        
         return RewardBreakdown(
             total=total,
             coverage_reward=coverage,
-            current_penalty=current,
+            current_penalty=current_penalty,
         )

@@ -18,9 +18,7 @@ import numpy as np
 from dynamixel_sdk import *
 
 
-# =====================================================
 # Dynamixel addresses
-# =====================================================
 
 ADDR_OPERATING_MODE = 11
 ADDR_TORQUE_ENABLE = 64
@@ -30,10 +28,7 @@ ADDR_PRESENT_POSITION = 132
 ADDR_PRESENT_CURRENT = 126
 
 
-# =====================================================
 # Constants
-# =====================================================
-
 EXTENDED_POSITION_MODE = 4
 
 TORQUE_ENABLE = 1
@@ -77,11 +72,7 @@ class DynamixelExecutor:
         # Encoder positions at initialization
         self.initial_positions = {}
 
-
-
-    # =================================================
     # Initialization
-    # =================================================
 
     def initialize(self):
 
@@ -133,10 +124,7 @@ class DynamixelExecutor:
 
 
 
-
-    # =================================================
     # Execute RL action
-    # =================================================
 
     def execute(
         self,
@@ -175,35 +163,20 @@ class DynamixelExecutor:
             action,
         ):
 
-
-            # -----------------------------
             # Action clipping
-            # -----------------------------
-
             delta = np.clip(
                 delta,
                 -1.0,
                 1.0,
             )
-
-
             encoder_delta = int(
                 delta * MAX_ENCODER_DELTA
             )
-
-
-            # -----------------------------
             # Update target position
-            # -----------------------------
 
             self.targets[motor] += encoder_delta
 
-
-
-            # -----------------------------
             # Relative safety limits
-            # -----------------------------
-
             lower_limit = (
                 self.initial_positions[motor]
                 -
@@ -235,13 +208,7 @@ class DynamixelExecutor:
                 f"delta={encoder_delta}, "
                 f"target={target}"
             )
-
-
-
-            # -----------------------------
             # Prepare SyncWrite packet
-            # -----------------------------
-
             param = [
 
                 DXL_LOBYTE(
@@ -261,8 +228,6 @@ class DynamixelExecutor:
                 ),
 
             ]
-
-
             if not self.group_sync_write.addParam(
                 motor,
                 param,
@@ -272,10 +237,7 @@ class DynamixelExecutor:
                     f"Failed adding motor {motor}"
                 )
 
-
-
         # Send synchronized command
-
         result = self.group_sync_write.txPacket()
 
         self.group_sync_write.clearParam()
@@ -286,14 +248,7 @@ class DynamixelExecutor:
             raise RuntimeError(
                 self.packet.getTxRxResult(result)
             )
-
-
-
-    # =================================================
     # Read motor states
-    # =================================================
-
-
     def read_position(
         self,
         motor_id,
@@ -304,16 +259,10 @@ class DynamixelExecutor:
             motor_id,
             ADDR_PRESENT_POSITION,
         )
-
-
         # Convert unsigned -> signed
         if pos > 0x7FFFFFFF:
             pos -= 0x100000000
-
-
         return pos
-
-
 
     def read_positions(self):
 
@@ -322,29 +271,24 @@ class DynamixelExecutor:
             for m in self.motor_ids
         ]
 
-
-
-
-    def read_current(
-        self,
-        motor_id,
-    ):
-
-        current, _, _ = self.packet.read2ByteTxRx(
+    def read_current(self, motor_id):
+        current, dxl_comm_result, dxl_error = self.packet.read2ByteTxRx(
             self.port,
             motor_id,
-            ADDR_PRESENT_CURRENT,
+            126,
         )
 
+        if dxl_comm_result != COMM_SUCCESS:
+            print(self.packet.getTxRxResult(dxl_comm_result))
 
-        # Dynamixel current is signed
-        if current > 0x7FFF:
+        if dxl_error != 0:
+            print(self.packet.getRxPacketError(dxl_error))
+
+        # Convert unsigned 16-bit -> signed 16-bit
+        if current >= 0x8000:
             current -= 0x10000
 
-
         return current
-
-
 
     def read_currents(self):
 
@@ -353,14 +297,7 @@ class DynamixelExecutor:
             for m in self.motor_ids
         ]
 
-
-
-
-    # =================================================
     # Helpers
-    # =================================================
-
-
     def write1(
         self,
         motor,
@@ -392,13 +329,7 @@ class DynamixelExecutor:
             )
 
 
-
-
-    # =================================================
     # Shutdown
-    # =================================================
-
-
     def shutdown(self):
 
         print("Disabling motors...")
@@ -411,7 +342,5 @@ class DynamixelExecutor:
                 ADDR_TORQUE_ENABLE,
                 TORQUE_DISABLE,
             )
-
-
         print("Shutdown complete.")
 

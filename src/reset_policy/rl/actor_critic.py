@@ -23,9 +23,9 @@ class ActorCritic(nn.Module):
         )
 
         # Actor
-        self.actor = nn.Linear(
-            hidden_dim,
-            action_dim,
+        self.actor = nn.Sequential(
+            nn.Linear(hidden_dim, action_dim),
+            nn.Tanh(),
         )
 
         # Learnable standard deviation
@@ -66,10 +66,14 @@ class ActorCritic(nn.Module):
         distribution = Normal(mean, std)
 
         action = distribution.sample()
-        action = torch.clamp(action, -1.0, 1.0)
 
         log_prob = distribution.log_prob(action).sum(-1)
+        print("sction: ", action)
+        print("Contains NaN:", torch.isnan(action).any())
 
+        print("mean:", mean)
+        print("std:", std)
+        print("log_std:", self.log_std)
         return (action,log_prob,value.squeeze(-1),)
 
     def evaluate(self, observations, actions):

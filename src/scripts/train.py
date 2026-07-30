@@ -9,14 +9,17 @@ Flow:
 
 import numpy as np
 import torch
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-from src.reset_policy.rl import ActorCritic
-from src.reset_policy.rl.rollout_buffer import RolloutBuffer
-from src.reset_policy.rl.ppo import PPO
+from reset_policy.rl.actor_critic import ActorCritic
+from reset_policy.rl.rollout_buffer import RolloutBuffer
+from reset_policy.rl.ppo import PPO
 
 from pathlib import Path
 
-checkpoint_dir = Path("checkpoints") / "no_wheels"
+checkpoint_dir = Path("checkpoints")
 checkpoint_dir.mkdir(exist_ok=True)
 
 
@@ -42,6 +45,7 @@ def train(
     for episode in range(episodes):
 
         state, _ = env.reset()
+        print(state)
 
         episode_reward = 0
 
