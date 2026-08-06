@@ -27,7 +27,7 @@ from reset_policy.environment.environment import ResetPolicyEnv
 # RL
 from train import train
 
-CAMERA_INTRINSICS = "camera_intrinsics.yaml"
+CAMERA_INTRINSICS = str(Path(__file__).resolve().parent.parent / "configs/camera_intrinsics.yaml")
 TAG_SIZE = 0.04
 WORLD_TAG_ID = 1
 CUBE_TAG_ID = 0
