@@ -6,19 +6,23 @@ import torch
 import cv2  # Add this import
 import numpy as np
 
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+
 # Perception
-from src.reset_policy.perception.cameras import CameraPair
-from src.reset_policy.perception.april_tag.track_apriltag import AprilTagTracker
-from src.reset_policy.perception.cube_tracker import CubeTracker
+from reset_policy.perception.cameras import CameraPair
+from reset_policy.perception.april_tag.track_apriltag import AprilTagTracker
+from reset_policy.perception.cube_tracker import CubeTracker
 
 # Control
-from src.reset_policy.control.dynamixel_executor import DynamixelExecutor
+from reset_policy.control.dynamixel_executor import DynamixelExecutor
 
 # Environment
-from src.reset_policy.environment.occupancy_grid import OccupancyGrid
-from src.reset_policy.environment.reward import RewardFunction
-from src.reset_policy.environment.observation import ObservationBuilder
-from src.reset_policy.environment.environment import ResetPolicyEnv
+from reset_policy.environment.occupancy_grid import OccupancyGrid
+from reset_policy.environment.reward import RewardFunction
+from reset_policy.environment.observation import ObservationBuilder
+from reset_policy.environment.environment import ResetPolicyEnv
 
 # RL
 from train import train
