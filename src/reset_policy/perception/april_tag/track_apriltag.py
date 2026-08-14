@@ -13,8 +13,8 @@ class AprilTagTracker:
         self,
         yaml_file: str,
         tag_size: float,
-        world_tag_id: int = 1,
-        cube_tag_id: int = 0,
+        world_tag_id: int = 0,
+        cube_tag_id: int = 1,
     ) -> None:
 
         self.world_tag_id = world_tag_id

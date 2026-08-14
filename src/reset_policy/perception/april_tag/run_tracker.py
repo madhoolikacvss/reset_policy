@@ -11,7 +11,7 @@ from track_apriltag import AprilTagTracker
 
 # SETTINGS
 TAG_SIZE = 0.05      # 50 mm
-yaml_path = str(Path(__file__).resolve().parent / "camera_intrinsics.yaml")
+yaml_path = str(Path(__file__).resolve().parent.parent.parent.parent / "configs/camera_intrinsics.yaml")
 tracker = AprilTagTracker(
     yaml_file=yaml_path,
     tag_size=TAG_SIZE,

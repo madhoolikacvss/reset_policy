@@ -1,9 +1,11 @@
 # board_config.yaml
+board_bounds:
+  x_min: -0.72
+  x_max: 0.015
+  y_min: -0.79
+  y_max: 0.15
+grid_config:
+  cell_size: 0.03
 board:
-  name: "Test Board"
-  dimensions:
-    x_min: 0.035
-    x_max: 0.830
-    y_min: 0.140
-    y_max: 0.654
-  world_tag_position: "top_right"  # or "top_left"
+  name: "board_bounds"
+  world_tag_position: "top_right"

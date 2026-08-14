@@ -21,7 +21,7 @@ from april_tag.track_apriltag import AprilTagTracker
 @dataclass
 class CubeState:
 
-    # Cube position in board coordinate frame (cm)
+    # Cube position in board coordinate frame (m)
     x: float
     y: float
 

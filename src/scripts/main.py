@@ -27,8 +27,8 @@ from train import train
 
 CAMERA_INTRINSICS = str(Path(__file__).resolve().parent.parent / "configs/camera_intrinsics.yaml")
 TAG_SIZE = 0.04
-WORLD_TAG_ID = 1
-CUBE_TAG_ID = 0
+WORLD_TAG_ID = 0
+CUBE_TAG_ID = 1
 
 PORT_NAME = (
     "/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT89FK0C-if00-port0"
@@ -44,7 +44,7 @@ MOTOR_IDS = [
 ]
 
 # Load configuration from YAML
-def load_config(config_path="config/config.yaml"):
+def load_config(config_path="configs/config.yaml"):
     """
     Load configuration from YAML file.
     
@@ -115,7 +115,7 @@ def create_dynamixel_bus():
 # Environment creation
 def create_environment():
     # Load configuration
-    config = load_config("config.yaml")
+    config = load_config("configs/config.yaml")
     
     # Extract board bounds and grid config
     board_bounds = config.get('board_bounds', {})
