@@ -354,6 +354,9 @@ def train(
     save_every=50,
 ):
 
+    steps_since_update = 0
+    MIN_STEPS_BEFORE_UPDATE = 50  # Minimum steps before PPO update
+
     actor_critic = ActorCritic().to(
         DEVICE
     )
@@ -380,11 +383,7 @@ def train(
     # ========================================================
 
     for episode in range(episodes):
-
-        # ----------------------------------------------------
         # Reset environment
-        # ----------------------------------------------------
-
         state, _ = env.reset()
 
         # print(state)
@@ -394,10 +393,7 @@ def train(
         terminated = False
         truncated = False
 
-        # ----------------------------------------------------
         # Episode diagnostics
-        # ----------------------------------------------------
-
         coverage_reward_sum = 0.0
 
         current_reward_sum = 0.0
@@ -416,9 +412,7 @@ def train(
 
         info = {}
 
-        # ====================================================
         # Rollout
-        # ====================================================
 
         while not (
             terminated or truncated
@@ -542,19 +536,19 @@ def train(
                     )
 
             state = next_state
+            steps_since_update += 1
 
-        # ====================================================
         # PPO update
-        # ====================================================
-
-        losses = ppo.update(
-            rollout_buffer
-        )
-
-        # ====================================================
+        # losses = ppo.update(
+        #     rollout_buffer
+        # )
+        if steps_since_update >= MIN_STEPS_BEFORE_UPDATE:
+            losses = ppo.update(rollout_buffer)
+            steps_since_update = 0
+        else:
+            # keep the buffer for next ep
+            pass
         # Save occupancy grid
-        # ====================================================
-
         occupancy = np.asarray(
             env.grid.as_numpy()
         ).copy()
@@ -569,10 +563,7 @@ def train(
             occupancy,
         )
 
-        # ====================================================
         # Save episode CSV
-        # ====================================================
-
         append_episode_log(
             log_file=log_file,
             episode=episode + 1,
@@ -639,10 +630,7 @@ def train(
         #     f"{hardware_error_seen}"
         # )
 
-        # ====================================================
         # Checkpoint
-        # ====================================================
-
         if (
             (episode + 1)
             % save_every

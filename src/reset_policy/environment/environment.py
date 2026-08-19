@@ -100,6 +100,7 @@ class ResetPolicyEnv(gym.Env):
         )
 
         self.step_count = 0
+        self.episode_count = 0
 
 
     # =========================================================
@@ -107,9 +108,12 @@ class ResetPolicyEnv(gym.Env):
     # =========================================================
     def reset(self, *, seed=None, options=None):
 
+
         super().reset(seed=seed)
+        self.episode_count += 1
 
         print("\n================ ENV RESET ================ ")
+        self.reward_fn.prev_currents = None
 
         # 1. Recover physical hardware
         self.executor.recovery()
@@ -148,14 +152,35 @@ class ResetPolicyEnv(gym.Env):
         )
         self.last_valid_observation = observation
 
+        self.executor.logger.update_context(
+            episode=self.episode_count,
+            step=0,
+            action=None,
+            cube_x=observation.cube_x if hasattr(observation, 'cube_x') else None,
+            cube_y=observation.cube_y if hasattr(observation, 'cube_y') else None,
+        )
+
         return observation.as_numpy(), {}
 
 
  
     # STEP
     def step(self, action):
-
+        # Clamp action to valid range
+        action = np.clip(action, -1.0, 1.0)
         self.step_count += 1
+
+
+        # Log action before execution (for debugging)
+        # But we don't have cube position yet, so useing last known
+
+        self.executor.logger.update_context(
+        episode=self.episode_count,
+        step=self.step_count,
+        action=action,
+        cube_x=self.last_valid_observation.cube_x if self.last_valid_observation else None,
+        cube_y=self.last_valid_observation.cube_y if self.last_valid_observation else None,
+        )   
 
         # =====================================================
         # 1. Execute RL action
@@ -290,6 +315,7 @@ class ResetPolicyEnv(gym.Env):
                     "hardware_error",
             }
 
+
             return (
                 observation.as_numpy(),
                 reward_info.total,
@@ -307,6 +333,13 @@ class ResetPolicyEnv(gym.Env):
         # Cache this as the newest known-good state.
         self.last_valid_observation = observation
 
+        self.executor.logger.update_context(
+            episode=self.episode_count,
+            step=self.step_count,
+            action=action,
+            cube_x=observation.cube_x if hasattr(observation, 'cube_x') else None,
+            cube_y=observation.cube_y if hasattr(observation, 'cube_y') else None,
+        )
         # =====================================================
         # 4. Get physical cube position
         # =====================================================

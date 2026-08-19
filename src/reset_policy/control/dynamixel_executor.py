@@ -188,10 +188,38 @@ class DynamixelExecutor:
 
         self._initialize_action_log()
 
+        from reset_policy.control.motor_logger import MotorLogger
+        self.logger = MotorLogger(
+            port_handler=port_handler,
+            packet_handler=packet_handler,
+            motor_ids=motor_ids,
+            log_frequency_hz=100.0,  # Log at 100 Hz
+            buffer_size=50000,
+        )
+        self.logger.start()
+
+        self.current_episode = 0
+        self.current_step = 0
+        
+
 
     # ========================================================
     # Diagnostic logging
     # ========================================================
+
+    def update_context(self, episode: int, step: int, action: np.ndarray = None,
+                       cube_x: float = None, cube_y: float = None):
+        """Update context from environment."""
+        self.current_episode = episode
+        self.current_step = step
+        if hasattr(self, 'logger'):
+            self.logger.update_context(
+                episode=episode,
+                step=step,
+                action=action,
+                cube_x=cube_x,
+                cube_y=cube_y,
+            )
 
     def _initialize_diagnostic_log(self):
 
@@ -1378,6 +1406,12 @@ class DynamixelExecutor:
         # ====================================================
         # Successful action
         # ====================================================
+
+        self.logger.update_context(
+            episode=self.current_episode,
+            step=self.current_step,
+            action=action,
+        )
 
         self._log_action(
             action=action,

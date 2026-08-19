@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from torch.distributions import Normal
+from torch.distributions import Normal, TanhTransform, TransformedDistribution  
 
 
 class ActorCritic(nn.Module):
@@ -63,10 +63,16 @@ class ActorCritic(nn.Module):
 
         std = self.log_std.exp()
 
-        distribution = Normal(mean, std)
+        # distribution = Normal(mean, std)
 
-        action = distribution.sample()
+        # action = distribution.sample()
 
+        # log_prob = distribution.log_prob(action).sum(-1)
+
+        # Use TanhNormal
+        normal = Normal(mean, std)
+        distribution = TransformedDistribution(normal, TanhTransform())
+        action = distribution.rsample()  # or .sample()
         log_prob = distribution.log_prob(action).sum(-1)
         # print("sction: ", action)
         # print("Contains NaN:", torch.isnan(action).any())
