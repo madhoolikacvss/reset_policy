@@ -58,9 +58,9 @@ class PPO:
         advantages = (
             advantages - advantages.mean()
         ) / (advantages.std(unbiased=False) + 1e-8)
-        print(torch.isnan(advantages).any())
-        print(torch.min(advantages))
-        print(torch.max(advantages))
+        # print(torch.isnan(advantages).any())
+        # print(torch.min(advantages))
+        # print(torch.max(advantages))
 
         return returns, advantages
 
@@ -90,15 +90,15 @@ class PPO:
                 values,
             )
         )
-        print("returns")
-        print(torch.min(returns))
-        print(torch.max(returns))
-        print(torch.isnan(returns).any())
+        # print("returns")
+        # print(torch.min(returns))
+        # print(torch.max(returns))
+        # print(torch.isnan(returns).any())
 
-        print("values")
-        print(torch.min(values))
-        print(torch.max(values))
-        print(torch.isnan(values).any())
+        # print("values")
+        # print(torch.min(values))
+        # print(torch.max(values))
+        # print(torch.isnan(values).any())
 
         for _ in range(self.epochs):
             (new_log_probs, entropy, predicted_values) = self.actor_critic.evaluate(
@@ -106,14 +106,14 @@ class PPO:
                 actions,
             )
 
-            print("predicted_values")
-            print(predicted_values)
+            # print("predicted_values")
+            # print(predicted_values)
 
-            print("returns")
-            print(returns)
+            # print("returns")
+            # print(returns)
 
-            print("critic loss")
-            print(F.mse_loss(predicted_values, returns))
+            # print("critic loss")
+            # print(F.mse_loss(predicted_values, returns))
 
             ratios = torch.exp(new_log_probs - old_log_probs)
 
@@ -136,19 +136,19 @@ class PPO:
             
             self.optimizer.zero_grad()
             loss.backward()
-            for name, p in self.actor_critic.named_parameters():
-                if p.grad is None:
-                    continue
+            # for name, p in self.actor_critic.named_parameters():
+            #     if p.grad is None:
+            #         continue
 
-                print(
-                    name,
-                    "grad max:",
-                    p.grad.abs().max().item(),
-                    "nan:",
-                    torch.isnan(p.grad).any().item(),
-                    "inf:",
-                    torch.isinf(p.grad).any().item(),
-                )
+                # print(
+                #     name,
+                #     "grad max:",
+                #     p.grad.abs().max().item(),
+                #     "nan:",
+                #     torch.isnan(p.grad).any().item(),
+                #     "inf:",
+                #     torch.isinf(p.grad).any().item(),
+                # )
 
             torch.nn.utils.clip_grad_norm_(
                 self.actor_critic.parameters(),

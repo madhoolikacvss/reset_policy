@@ -5,13 +5,17 @@ import gymnasium as gym
 import numpy as np
 
 from gymnasium import spaces
+
 import sys
 from pathlib import Path
+
 sys.path.append(str(Path(__file__).resolve().parent))
+
 from observation import ObservationBuilder
 from reward import RewardFunction
 from occupancy_grid import OccupancyGrid
-from renderer import BoardRenderer  
+from renderer import BoardRenderer
+
 
 class ResetPolicyEnv(gym.Env):
 
@@ -29,12 +33,23 @@ class ResetPolicyEnv(gym.Env):
         cube_tracker,
         occupancy_grid: OccupancyGrid,
         reward_function: RewardFunction,
+
         max_motor_delta=400,
         action_duration: float = 0.4,
+
         render_mode=None,
+
         max_steps=100,
         target_coverage=0.95,
-        max_current=800,
+
+        # =====================================================
+        # Current thresholds
+        # =====================================================
+
+        safe_current_threshold=500.0,
+        moderate_current_threshold=1800.0,
+        high_current_threshold=2500.0,
+
     ):
 
         super().__init__()
@@ -48,14 +63,6 @@ class ResetPolicyEnv(gym.Env):
 
         self.action_duration = action_duration
 
-        # Observation:
-        #
-        # cube x,y,yaw
-        # 4 motor positions
-        # 4 motor currents
-        #
-        # total = 11
-
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
@@ -63,19 +70,15 @@ class ResetPolicyEnv(gym.Env):
             dtype=np.float32,
         )
 
-        # Four Dynamixels
-        #
-        # each action:
-        # -1 = release max
-        # +1 = pull max
-
         self.action_space = spaces.Box(
             low=-1.0,
             high=1.0,
             shape=(4,),
             dtype=np.float32,
         )
+
         self.render_mode = render_mode
+
         if self.render_mode in ("human", "rgb_array"):
             self.renderer = BoardRenderer()
         else:
@@ -83,112 +86,355 @@ class ResetPolicyEnv(gym.Env):
 
         self.max_steps = max_steps
         self.target_coverage = target_coverage
-        self.max_current = max_current
+
+        self.safe_current_threshold = (
+            safe_current_threshold
+        )
+
+        self.moderate_current_threshold = (
+            moderate_current_threshold
+        )
+
+        self.high_current_threshold = (
+            high_current_threshold
+        )
 
         self.step_count = 0
-                
 
 
-
-    def reset(self,*,seed=None,options=None,):
+    # =========================================================
+    # RESET
+    # =========================================================
+    def reset(self, *, seed=None, options=None):
 
         super().reset(seed=seed)
+
+        print("\n================ ENV RESET ================ ")
+
+        # 1. Recover physical hardware
+        self.executor.recovery()
+        # 2. Reset episode bookkeeping
+
         self.grid.reset()
-        observation = self.obs_builder.get_observation()
-        x = observation.cube_x
-        y = observation.cube_y
         self.step_count = 0
-        self.grid.visit(x,y,)
+        # 3. Establish initial motor positions AFTER recovery
+
         self.obs_builder.reset()
+
+        # 4. Get first observation
+
+        result = self.obs_builder.get_observation_result()
+
+        if result.hardware_error:
+
+            raise RuntimeError(
+                "Hardware error occurred during environment reset: "
+                f"{result.error_message}"
+            )
+
+        if result.observation is None:
+
+            raise RuntimeError(
+                "Failed to obtain observation during reset: "
+                f"{result.error_message}"
+            )
+
+        observation = result.observation
+        # 5. Mark starting cube position
+
+        self.grid.visit(
+            observation.cube_x,
+            observation.cube_y,
+        )
+        self.last_valid_observation = observation
+
         return observation.as_numpy(), {}
 
+
+ 
+    # STEP
     def step(self, action):
+
         self.step_count += 1
 
-        self.executor.execute(action)
+        # =====================================================
+        # 1. Execute RL action
+        # =====================================================
+
+        execution_result = self.executor.execute(action)
+
+        # -----------------------------------------------------
+        # Hardware error during action execution
+        # -----------------------------------------------------
+
+        if execution_result.hardware_error:
+
+            print("Hardware error during action execution.")
+            print(
+                f"Hardware error IDs: "
+                f"{execution_result.hardware_error_ids}"
+            )
+            print(
+                f"Hardware error status: "
+                f"{execution_result.hardware_error_status}"
+            )
+
+            # Use the last known-good observation.
+            observation = self.last_valid_observation
+
+            reward_info = self.reward_fn.compute(
+                visitation_count=0,
+                motor_currents=observation.motor_currents,
+                hardware_error=True,
+            )
+
+            info = {
+                "coverage": self.grid.coverage(),
+                "visits": 0,
+
+                "hardware_error": True,
+                "hardware_error_ids":
+                    execution_result.hardware_error_ids,
+                "hardware_error_status":
+                    execution_result.hardware_error_status,
+
+                "execution_success": False,
+                "execution_error_message":
+                    execution_result.error_message,
+
+                "termination_reason":
+                    "hardware_error",
+            }
+
+            return (
+                observation.as_numpy(),
+                reward_info.total,
+                True,
+                False,
+                info,
+            )
+
+        # -----------------------------------------------------
+        # Non-hardware execution failure
+        # -----------------------------------------------------
+
+        if not execution_result.success:
+
+            raise RuntimeError(
+                execution_result.error_message
+            )
+
+        # =====================================================
+        # 2. Wait for physical movement
+        # =====================================================
+
         time.sleep(self.action_duration)
 
-        observation = self.obs_builder.get_observation()
+        # =====================================================
+        # 3. Read observation
+        # =====================================================
+
+        observation_result = (
+            self.obs_builder.get_observation_result()
+        )
+
+        # -----------------------------------------------------
+        # Hardware error while reading observation
+        # -----------------------------------------------------
+
+        if observation_result.hardware_error:
+
+            print(
+                "Hardware error while reading observation."
+            )
+
+            print(
+                f"Hardware error IDs: "
+                f"{observation_result.hardware_error_ids}"
+            )
+
+            print(
+                f"Hardware error status: "
+                f"{observation_result.hardware_error_status}"
+            )
+
+            # IMPORTANT:
+            # Do NOT use the failed observation.
+            # Use the last valid one.
+            observation = self.last_valid_observation
+
+            reward_info = self.reward_fn.compute(
+                visitation_count=0,
+                motor_currents=observation.motor_currents,
+                hardware_error=True,
+            )
+
+            info = {
+                "coverage": self.grid.coverage(),
+                "visits": 0,
+
+                "hardware_error": True,
+
+                "hardware_error_ids":
+                    observation_result.hardware_error_ids,
+
+                "hardware_error_status":
+                    observation_result.hardware_error_status,
+
+                "execution_success": True,
+
+                "execution_error_message":
+                    observation_result.error_message,
+
+                "termination_reason":
+                    "hardware_error",
+            }
+
+            return (
+                observation.as_numpy(),
+                reward_info.total,
+                True,
+                False,
+                info,
+            )
+
+        # -----------------------------------------------------
+        # Observation succeeded
+        # -----------------------------------------------------
+
+        observation = observation_result.observation
+
+        # Cache this as the newest known-good state.
+        self.last_valid_observation = observation
+
+        # =====================================================
+        # 4. Get physical cube position
+        # =====================================================
+
         x = observation.cube_x
         y = observation.cube_y
 
+        # =====================================================
+        # 5. Update occupancy grid
+        # =====================================================
+
         visits = self.grid.visit(x, y)
+
+        # =====================================================
+        # 6. Compute reward
+        # =====================================================
 
         reward_info = self.reward_fn.compute(
             visitation_count=visits,
             motor_currents=observation.motor_currents,
+            hardware_error=False,
         )
 
-        if self.render_mode == "human":
-            self.render()
+        reward = reward_info.total
 
-        info = {
-            "coverage": self.grid.coverage(),
-            "visits": visits,
-            "coverage_reward": reward_info.coverage_reward,
-            "current_penalty": reward_info.current_penalty,
-            "cube_position_cm": (
-                observation.cube_x,
-                observation.cube_y,
-            ),
-            "motor_currents": observation.motor_currents,  # Add this
-        }
-        
-        truncated = terminated = False
-        truncated = self.step_count >= self.max_steps
-        coverage_done = info["coverage"] >= self.target_coverage
+        # =====================================================
+        # 7. Episode conditions
+        # =====================================================
 
-        x_pos = info["cube_position_cm"][0]
-        y_pos = info["cube_position_cm"][1]
+        coverage = self.grid.coverage()
+
+        coverage_done = (
+            coverage >= self.target_coverage
+        )
 
         out_of_bounds = (
-            x_pos < 0
-            or x_pos > self.grid.board_width
-            or y_pos < 0
-            or y_pos > self.grid.board_height
+            x < self.grid.x_min
+            or x > self.grid.x_max
+            or y < self.grid.y_min
+            or y > self.grid.y_max
         )
 
-        # More conservative current limit
-        # Use 80% of max as warning, 100% as termination
-        current_warning_threshold = self.max_current * 0.8
-        current_limit = any(
-            abs(i) >= current_warning_threshold  # More conservative
+        max_current = max(
+            abs(float(i))
             for i in observation.motor_currents
         )
 
-        # NEW: Detect current spikes (sudden increases)
-        current_spike = False
-        if hasattr(self, 'prev_currents'):
-            for curr, prev in zip(observation.motor_currents, self.prev_currents):
-                if abs(curr - prev) > 200:  # Sudden increase of 200 mA
-                    current_spike = True
-                    break
-        self.prev_currents = observation.motor_currents
+        high_current = (
+            max_current >
+            self.high_current_threshold
+        )
 
-        # TERMINATE on:
-        # 1. Coverage achieved (good)
-        # 2. Out of bounds (bad)
-        # 3. Current limit (bad - taut string)
-        # 4. Current spike (bad - binding/taut)
-        if coverage_done:
+        # =====================================================
+        # 8. Termination
+        # =====================================================
+
+        terminated = False
+        truncated = False
+        termination_reason = None
+
+        if high_current:
+
             terminated = True
-            info["termination_reason"] = "coverage"
+            termination_reason = "high_current"
+
         elif out_of_bounds:
-            terminated = True
-            info["termination_reason"] = "out_of_bounds"
-        elif current_limit:
-            terminated = True
-            info["termination_reason"] = "over_current"
-        elif current_spike:
-            terminated = True
-            info["termination_reason"] = "current_spike"
-        elif truncated:
-            info["termination_reason"] = "max_steps"
 
-        # Return with modified reward if current spike detected
-        reward = reward_info.total
-        if current_spike:
-            reward -= 50.0  # Extra penalty for current spike
+            terminated = True
+            termination_reason = "out_of_bounds"
+
+        elif coverage_done:
+
+            terminated = True
+            termination_reason = "coverage"
+
+        elif self.step_count >= self.max_steps:
+
+            truncated = True
+            termination_reason = "max_steps"
+
+        # =====================================================
+        # 9. Info
+        # =====================================================
+
+        info = {
+            "coverage": coverage,
+            "visits": visits,
+
+            "coverage_reward":
+                reward_info.coverage_reward,
+
+            "current_reward":
+                reward_info.current_reward,
+
+            "current_change_penalty":
+                reward_info.current_change_penalty,
+
+            "hardware_error_penalty":
+                reward_info.hardware_error_penalty,
+
+            "max_current":
+                max_current,
+
+            "motor_currents":
+                observation.motor_currents.copy(),
+
+            "hardware_error":
+                False,
+
+            "hardware_error_ids":
+                [],
+
+            "hardware_error_status":
+                {},
+
+            "execution_success":
+                True,
+
+            "cube_position":
+                (x, y),
+
+            "termination_reason":
+                termination_reason,
+        }
+
+        # =====================================================
+        # 10. Return
+        # =====================================================
 
         return (
             observation.as_numpy(),
@@ -199,12 +445,18 @@ class ResetPolicyEnv(gym.Env):
         )
 
 
+    # =========================================================
+    # RENDER
+    # =========================================================
+
     def render(self):
 
         if self.renderer is None:
             return None
 
-        observation = self.obs_builder.get_observation()
+        observation = (
+            self.obs_builder.get_observation()
+        )
 
         return self.renderer.render(
             cube_x=observation.cube_x,
@@ -215,8 +467,13 @@ class ResetPolicyEnv(gym.Env):
         )
 
 
+    # =========================================================
+    # CLOSE
+    # =========================================================
+
     def close(self):
 
         self.executor.shutdown()
+
         if self.renderer is not None:
             self.renderer.close()

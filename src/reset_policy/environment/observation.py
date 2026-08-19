@@ -5,108 +5,63 @@ import numpy as np
 
 import sys
 from pathlib import Path
-sys.path.append(str(Path(__file__).resolve().parent.parent))
+sys.path.append(
+    str(Path(__file__).resolve().parent.parent)
+)
 
 from perception.cube_tracker import CubeTracker
 from control.dynamixel_executor import DynamixelExecutor
 
 
-# ==============================
+# ============================================================
 # Normalization constants
-# ==============================
+# ============================================================
 
-# Board bounds (meters)
-X_MIN = 0.035
-X_MAX = 0.830
-
-Y_MIN = 0.140
-Y_MAX = 0.654
-
-
-# Dynamixel current limit (mA)
 CURRENT_LIMIT = 1750.0
 
-
-# Maximum expected motor displacement
-# Tune this based on your task.
-# Example:
-# 400 counts/action * ~10 actions = 4000 counts
 MAX_POSITION_DELTA = 4000.0
 
 
+# ============================================================
+# Observation
+# ============================================================
 
 @dataclass
 class Observation:
 
-    # Cube state
+    # --------------------------------------------------------
+    # Physical cube state
+    # --------------------------------------------------------
+
+    # meters
     cube_x: float
     cube_y: float
+
+    # radians
     cube_yaw: float
 
-    # Raw motor states
+    # --------------------------------------------------------
+    # Motor state
+    # --------------------------------------------------------
+
     motor_positions: np.ndarray
     motor_currents: np.ndarray
 
-    # Stored initial motor positions
+    # Motor positions at beginning of episode
     initial_motor_positions: np.ndarray
 
+    # --------------------------------------------------------
+    # Normalized observation
+    # --------------------------------------------------------
+
+    cube_x_norm: float
+    cube_y_norm: float
+
+    # --------------------------------------------------------
+    # Convert to PPO observation
+    # --------------------------------------------------------
 
     def as_numpy(self) -> np.ndarray:
-        """
-        Return normalized observation vector for PPO.
-
-        Output:
-        [
-            cube_x_norm,
-            cube_y_norm,
-            cube_yaw_norm,
-
-            motor1_position_delta_norm,
-            motor2_position_delta_norm,
-            motor3_position_delta_norm,
-            motor4_position_delta_norm,
-
-            motor1_current_norm,
-            motor2_current_norm,
-            motor3_current_norm,
-            motor4_current_norm,
-        ]
-        """
-
-        # -----------------------------
-        # Normalize cube position
-        # -----------------------------
-
-        cube_x_norm = (
-            self.cube_x - X_MIN
-        ) / (
-            X_MAX - X_MIN
-        )
-
-        cube_y_norm = (
-            self.cube_y - Y_MIN
-        ) / (
-            Y_MAX - Y_MIN
-        )
-
-
-        # Clamp in case of small calibration errors
-        cube_x_norm = np.clip(
-            cube_x_norm,
-            0.0,
-            1.0,
-        )
-
-        cube_y_norm = np.clip(
-            cube_y_norm,
-            0.0,
-            1.0,
-        )
-
-
-        # -----------------------------
-        # Normalize yaw
-        # -----------------------------
 
         cube_yaw_norm = (
             self.cube_yaw / np.pi
@@ -118,11 +73,9 @@ class Observation:
             1.0,
         )
 
-
-        # -----------------------------
-        # Normalize motor positions
-        # Relative displacement from start
-        # -----------------------------
+        # ----------------------------------------------------
+        # Motor position normalization
+        # ----------------------------------------------------
 
         position_delta = (
             self.motor_positions
@@ -131,8 +84,7 @@ class Observation:
         )
 
         position_delta_norm = (
-            position_delta
-            /
+            position_delta /
             MAX_POSITION_DELTA
         )
 
@@ -142,14 +94,12 @@ class Observation:
             1.0,
         )
 
-
-        # -----------------------------
-        # Normalize currents
-        # -----------------------------
+        # ----------------------------------------------------
+        # Current normalization
+        # ----------------------------------------------------
 
         current_norm = (
-            self.motor_currents
-            /
+            self.motor_currents /
             CURRENT_LIMIT
         )
 
@@ -159,13 +109,16 @@ class Observation:
             1.0,
         )
 
+        # ----------------------------------------------------
+        # Final PPO observation
+        # ----------------------------------------------------
 
         obs = np.concatenate(
             [
                 np.array(
                     [
-                        cube_x_norm,
-                        cube_y_norm,
+                        self.cube_x_norm,
+                        self.cube_y_norm,
                         cube_yaw_norm,
                     ],
                     dtype=np.float32,
@@ -181,10 +134,38 @@ class Observation:
             ]
         )
 
-
         return obs.astype(np.float32)
 
 
+# ============================================================
+# Observation Result
+# ============================================================
+
+@dataclass
+class ObservationResult:
+
+    observation: Observation | None
+
+    hardware_error: bool = False
+
+    hardware_error_ids: list | None = None
+
+    hardware_error_status: dict | None = None
+
+    error_message: str = ""
+
+    def __post_init__(self):
+
+        if self.hardware_error_ids is None:
+            self.hardware_error_ids = []
+
+        if self.hardware_error_status is None:
+            self.hardware_error_status = {}
+
+
+# ============================================================
+# Observation Builder
+# ============================================================
 
 class ObservationBuilder:
 
@@ -192,58 +173,213 @@ class ObservationBuilder:
         self,
         cube_tracker: CubeTracker,
         executor: DynamixelExecutor,
+
+        # Board bounds in meters
+        x_min: float,
+        x_max: float,
+        y_min: float,
+        y_max: float,
     ):
 
         self.cube_tracker = cube_tracker
         self.executor = executor
 
-        # Store motor starting position
+        self.x_min = x_min
+        self.x_max = x_max
+
+        self.y_min = y_min
+        self.y_max = y_max
+
         self.initial_motor_positions = None
 
 
+    # ========================================================
+    # Reset
+    # ========================================================
 
     def reset(self):
-        """
-        Called at the beginning of every episode.
-        """
 
-        self.initial_motor_positions = np.array(
-            self.executor.read_positions(),
+        positions = self.executor.read_positions()
+
+        if positions is None:
+
+            (
+                hardware_error,
+                error_ids,
+                error_status,
+                message,
+            ) = (
+                self.executor.get_hardware_error_state()
+            )
+
+            raise RuntimeError(
+                message
+                or
+                "Failed to read motor positions during reset."
+            )
+
+        self.initial_motor_positions = np.asarray(
+            positions,
             dtype=np.float32,
+        ).copy()
+
+
+    # ========================================================
+    # Build observation
+    # ========================================================
+
+    def get_observation_result(
+        self,
+    ) -> ObservationResult:
+
+        # ----------------------------------------------------
+        # Cube state
+        # ----------------------------------------------------
+
+        cube_state = (
+            self.cube_tracker.get_state()
         )
-
-
-
-    def get_observation(self) -> Observation:
-
-        cube_state = self.cube_tracker.get_state()
 
         if not cube_state.detected:
-            raise RuntimeError(
-                "Cube not detected"
+
+            return ObservationResult(
+                observation=None,
+                hardware_error=False,
+                error_message="Cube not detected",
             )
 
+        # ----------------------------------------------------
+        # Motor positions
+        # ----------------------------------------------------
 
-        motor_positions = np.array(
-            self.executor.read_positions(),
-            dtype=np.float32,
+        motor_positions = (
+            self.executor.read_positions()
         )
 
+        if motor_positions is None:
 
-        motor_currents = np.array(
-            self.executor.read_currents(),
-            dtype=np.float32,
+            (
+                hardware_error,
+                error_ids,
+                error_status,
+                message,
+            ) = (
+                self.executor.get_hardware_error_state()
+            )
+
+            return ObservationResult(
+                observation=None,
+
+                hardware_error=hardware_error,
+
+                hardware_error_ids=error_ids,
+
+                hardware_error_status=error_status,
+
+                error_message=(
+                    message
+                    or
+                    "Failed to read motor positions"
+                ),
+            )
+
+        # ----------------------------------------------------
+        # Motor currents
+        # ----------------------------------------------------
+
+        motor_currents = (
+            self.executor.read_currents()
         )
 
+        if motor_currents is None:
 
-        # Safety check
+            (
+                hardware_error,
+                error_ids,
+                error_status,
+                message,
+            ) = (
+                self.executor.get_hardware_error_state()
+            )
+
+            return ObservationResult(
+                observation=None,
+
+                hardware_error=hardware_error,
+
+                hardware_error_ids=error_ids,
+
+                hardware_error_status=error_status,
+
+                error_message=(
+                    message
+                    or
+                    "Failed to read motor currents"
+                ),
+            )
+
+        # ----------------------------------------------------
+        # Initial motor positions
+        # ----------------------------------------------------
+
         if self.initial_motor_positions is None:
+
             self.initial_motor_positions = (
-                motor_positions.copy()
+                np.asarray(
+                    motor_positions,
+                    dtype=np.float32,
+                ).copy()
             )
 
+        motor_positions = np.asarray(
+            motor_positions,
+            dtype=np.float32,
+        )
 
-        return Observation(
+        motor_currents = np.asarray(
+            motor_currents,
+            dtype=np.float32,
+        )
+
+        # ----------------------------------------------------
+        # Normalize cube position
+        # ----------------------------------------------------
+
+        cube_x_norm = (
+            cube_state.x - self.x_min
+        ) / (
+            self.x_max - self.x_min
+        )
+
+        cube_y_norm = (
+            cube_state.y - self.y_min
+        ) / (
+            self.y_max - self.y_min
+        )
+
+        # Clamp only for the PPO observation.
+        #
+        # The physical cube_x/cube_y remain untouched and
+        # are used by the occupancy grid / bounds checking.
+
+        cube_x_norm = float(
+            np.clip(
+                cube_x_norm,
+                0.0,
+                1.0,
+            )
+        )
+
+        cube_y_norm = float(
+            np.clip(
+                cube_y_norm,
+                0.0,
+                1.0,
+            )
+        )
+
+        # Build observation
+        observation = Observation(
 
             cube_x=cube_state.x,
 
@@ -255,6 +391,32 @@ class ObservationBuilder:
 
             motor_currents=motor_currents,
 
-            initial_motor_positions=
-                self.initial_motor_positions.copy(),
+            initial_motor_positions=(
+                self.initial_motor_positions.copy()
+            ),
+
+            cube_x_norm=cube_x_norm,
+
+            cube_y_norm=cube_y_norm,
         )
+
+        return ObservationResult(
+            observation=observation,
+            hardware_error=False,
+        )
+
+
+    # # Convenience method
+    # def get_observation(self) -> Observation:
+
+    #     result = (
+    #         self.get_observation_result()
+    #     )
+
+    #     if result.observation is None:
+
+    #         raise RuntimeError(
+    #             result.error_message
+    #         )
+
+    #     return result.observation

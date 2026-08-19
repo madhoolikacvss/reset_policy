@@ -71,9 +71,13 @@ class CubeTracker:
                 timestamp=time.time(),
                 raw_pose=None,
             )
-
-        # Convert meters -> cm
         x, y, z, roll, pitch, yaw = pose
+
+
+        print("=============FROM cube tracker get state=========== ")
+        print("----  positions from get_state()------")
+        print("x: ", x)
+        print("y: ", y)
 
 
         return CubeState(
@@ -94,7 +98,7 @@ class CubeTracker:
         Convenience function.
 
         Returns:
-            (x,y) in cm
+            (x,y) in m
         """
 
         state = self.get_state()

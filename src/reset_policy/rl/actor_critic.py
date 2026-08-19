@@ -68,12 +68,12 @@ class ActorCritic(nn.Module):
         action = distribution.sample()
 
         log_prob = distribution.log_prob(action).sum(-1)
-        print("sction: ", action)
-        print("Contains NaN:", torch.isnan(action).any())
+        # print("sction: ", action)
+        # print("Contains NaN:", torch.isnan(action).any())
 
-        print("mean:", mean)
-        print("std:", std)
-        print("log_std:", self.log_std)
+        # print("mean:", mean)
+        # print("std:", std)
+        # print("log_std:", self.log_std)
         return (action,log_prob,value.squeeze(-1),)
 
     def evaluate(self, observations, actions):
