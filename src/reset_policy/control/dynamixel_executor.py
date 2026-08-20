@@ -196,7 +196,7 @@ class DynamixelExecutor:
             log_frequency_hz=100.0,  # Log at 100 Hz
             buffer_size=50000,
         )
-        self.logger.start()
+        # self.logger.start()
 
         self.current_episode = 0
         self.current_step = 0
@@ -1018,6 +1018,12 @@ class DynamixelExecutor:
             reason="initialization"
         )
 
+        if hasattr(self, 'logger') and self.logger is not None:
+            print("Starting motor logger...")
+            self.logger.start()
+            print("Motor logger started")
+        
+        print("Initialization complete.")
         print(
             "Initialization complete."
         )
