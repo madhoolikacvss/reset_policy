@@ -5,23 +5,6 @@ High-frequency motor telemetry logger for diagnostic purposes.
 
 This runs in a separate thread to log motor data at the control frequency
 (100-200 Hz) without blocking the main training loop.
-
-Logs:
-    - Motor positions (4 bytes each)
-    - Motor currents (2 bytes each, signed mA)
-    - Motor velocities (4 bytes each)
-    - Motor PWM values (2 bytes each, signed)
-    - Input voltage (2 bytes each, *0.1 V)
-    - Temperature (1 byte each, °C)
-    - Hardware error status (1 byte each)
-    - Trajectory positions (4 bytes each)
-    - Moving status (1 byte each)
-    - Torque enable status (1 byte each)
-
-Also logs:
-    - Timestamps (high precision)
-    - Action commands (when received)
-    - Episode information
 """
 
 from __future__ import annotations
@@ -82,18 +65,12 @@ class MotorSnapshot:
     action: Optional[np.ndarray] = None
     cube_x: Optional[float] = None
     cube_y: Optional[float] = None
+    action_in_episode: int = -1  # Action number within current episode
 
 
 class MotorLogger:
     """
     High-frequency motor data logger running in a separate thread.
-    
-    Features:
-        - Logs all motors simultaneously using sync reads when possible
-        - Runs at configurable frequency (default: 100 Hz)
-        - Circular buffer for recent data (for debugging)
-        - CSV logging for long-term storage
-        - Trigger-based logging for error events
     """
     
     def __init__(
@@ -103,19 +80,9 @@ class MotorLogger:
         motor_ids: List[int],
         log_dir: Path = None,
         log_frequency_hz: float = 100.0,
-        buffer_size: int = 10000,  # Keep 10000 recent samples
-        trigger_buffer_size: int = 500,  # 5 seconds at 100 Hz
+        buffer_size: int = 10000,
+        trigger_buffer_size: int = 500,
     ):
-        """
-        Args:
-            port_handler: Dynamixel port handler
-            packet_handler: Dynamixel packet handler
-            motor_ids: List of motor IDs to log
-            log_dir: Directory to save logs (auto-created)
-            log_frequency_hz: Logging frequency in Hz
-            buffer_size: Maximum number of samples to keep in memory
-            trigger_buffer_size: Samples to keep before/after trigger
-        """
         self.port = port_handler
         self.packet = packet_handler
         self.motor_ids = motor_ids
@@ -148,10 +115,14 @@ class MotorLogger:
         self.csv_headers_written = False
         
         # Current episode/step tracking
-        self.current_episode = -1
-        self.current_step = -1
-        self.current_action = None
-        self.cube_position = (None, None)
+        self._episode = 0
+        self._step = 0
+        self._action = None
+        self._cube_x = None
+        self._cube_y = None
+        
+        # Track action counts per episode for logging
+        self.action_count_in_episode = 0
         
         # Statistics
         self.sample_count = 0
@@ -163,20 +134,7 @@ class MotorLogger:
         self.error_trigger_time = 0.0
         self.error_log_file = None
         
-        # Pre-allocate arrays for speed
-        self._read_cache = {}
-        
         print(f"MotorLogger initialized: {log_frequency_hz} Hz, buffer_size={buffer_size}")
-
-        # Context tracking (updated externally)
-        self._episode = 0
-        self._step = 0
-        self._action = None
-        self._cube_x = None
-        self._cube_y = None
-        
-        # Track action counts per episode for logging
-        self.action_count_in_episode = 0
         
     def start(self):
         """Start the logging thread."""
@@ -203,33 +161,37 @@ class MotorLogger:
         self._close_csv()
         
     def _log_loop(self):
-            """Main logging loop."""
-            while self.running:
-                loop_start = time.perf_counter()
+        """Main logging loop."""
+        while self.running:
+            loop_start = time.perf_counter()
+            
+            try:
+                # Read snapshot with current context
+                snapshot = self._read_snapshot()
                 
-                try:
-                    # Read snapshot with current context
-                    snapshot = self._read_snapshot()
-                    
-                    # ... store in buffers ...
-                    
-                    # Write to CSV if enabled
-                    if self.csv_writer is not None:
-                        self._write_snapshot_csv(snapshot)
-                    
-                    # Check for errors
-                    self._check_errors(snapshot)
-                    
-                except Exception as e:
-                    self.error_count += 1
-                    if self.error_count % 10 == 1:
-                        print(f"MotorLogger error: {e}")
+                # Store in buffers
+                with self.lock:
+                    self.buffer.append(snapshot)
+                    self.trigger_buffer.append(snapshot)
+                    self.sample_count += 1
                 
-                # Maintain frequency
-                elapsed = time.perf_counter() - loop_start
-                sleep_time = max(0, self.log_interval - elapsed)
-                if sleep_time > 0:
-                    time.sleep(sleep_time)
+                # Write to CSV if enabled
+                if self.csv_writer is not None:
+                    self._write_snapshot_csv(snapshot)
+                
+                # Check for errors
+                self._check_errors(snapshot)
+                
+            except Exception as e:
+                self.error_count += 1
+                if self.error_count % 10 == 1:
+                    print(f"MotorLogger error: {e}")
+            
+            # Maintain frequency
+            elapsed = time.perf_counter() - loop_start
+            sleep_time = max(0, self.log_interval - elapsed)
+            if sleep_time > 0:
+                time.sleep(sleep_time)
                     
     def _read_snapshot(self) -> MotorSnapshot:
         """Read snapshot with current context."""
@@ -240,7 +202,7 @@ class MotorLogger:
             action=self._action.copy() if self._action is not None else None,
             cube_x=self._cube_x,
             cube_y=self._cube_y,
-            action_in_episode=self.action_count_in_episode,  # Track action number within episode
+            action_in_episode=self.action_count_in_episode,
         )
         
         for motor_id in self.motor_ids:
@@ -366,6 +328,7 @@ class MotorLogger:
             "timestamp",
             "episode",
             "step",
+            "action_in_episode",
             "cube_x",
             "cube_y",
             "action_m16", "action_m17", "action_m18", "action_m19",
@@ -399,6 +362,7 @@ class MotorLogger:
                 snapshot.timestamp,
                 snapshot.episode,
                 snapshot.step,
+                snapshot.action_in_episode,
                 snapshot.cube_x if snapshot.cube_x is not None else "",
                 snapshot.cube_y if snapshot.cube_y is not None else "",
             ]
@@ -487,6 +451,7 @@ class MotorLogger:
             writer.writerow([f"Decoded: {', '.join(self._decode_hardware_error(error_code))}"])
             writer.writerow([f"Episode: {snapshot.episode}"])
             writer.writerow([f"Step: {snapshot.step}"])
+            writer.writerow([f"Action in episode: {snapshot.action_in_episode}"])
             writer.writerow([f"Trigger Buffer Size: {len(trigger_data)}"])
             writer.writerow([])
             
@@ -496,7 +461,6 @@ class MotorLogger:
             
             # Write all trigger data
             for data in trigger_data:
-                # Convert snapshot to row (simplified)
                 row = self._snapshot_to_row(data)
                 writer.writerow(row)
             
@@ -504,11 +468,11 @@ class MotorLogger:
         
     def _snapshot_to_row(self, snapshot: MotorSnapshot) -> List:
         """Convert snapshot to CSV row (helper for error logs)."""
-        # Simplified version - similar to _write_snapshot_csv
         row = [
             snapshot.timestamp,
             snapshot.episode,
             snapshot.step,
+            snapshot.action_in_episode,
             snapshot.cube_x if snapshot.cube_x is not None else "",
             snapshot.cube_y if snapshot.cube_y is not None else "",
         ]
@@ -611,8 +575,6 @@ class MotorLogger:
         self.csv_writer = open(self.csv_file, 'a', newline='')
         self.csv_headers_written = True
         print(f"Episode {episode}: CSV logging started: {self.csv_file}")
-        
-    
         
     def get_recent_data(self, n: int = 100) -> List[MotorSnapshot]:
         """Get the n most recent samples."""
