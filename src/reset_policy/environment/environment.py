@@ -156,14 +156,6 @@ class ResetPolicyEnv(gym.Env):
         )
         self.last_valid_observation = observation
 
-        self.executor.logger.update_context(
-            episode=self.episode_count,
-            step=0,
-            action=None,
-            cube_x=observation.cube_x if hasattr(observation, 'cube_x') else None,
-            cube_y=observation.cube_y if hasattr(observation, 'cube_y') else None,
-        )
-
         return observation.as_numpy(), {}
 
     # STEP
@@ -216,24 +208,6 @@ class ResetPolicyEnv(gym.Env):
                     )
             else:
                 print("WARNING: initial_positions is None, skipping safety filter")
-
-        # Log action before execution (for debugging)
-        if self.last_valid_observation is not None:
-            self.executor.logger.update_context(
-                episode=self.episode_count,
-                step=self.step_count,
-                action=action,
-                cube_x=self.last_valid_observation.cube_x,
-                cube_y=self.last_valid_observation.cube_y,
-            )
-        else:
-            self.executor.logger.update_context(
-                episode=self.episode_count,
-                step=self.step_count,
-                action=action,
-                cube_x=None,
-                cube_y=None,
-            )
 
         # =====================================================
         # 2. Execute RL action
@@ -380,15 +354,6 @@ class ResetPolicyEnv(gym.Env):
 
         # Cache this as the newest known-good state
         self.last_valid_observation = observation
-
-        # Update logger with actual observation data
-        self.executor.logger.update_context(
-            episode=self.episode_count,
-            step=self.step_count,
-            action=action,
-            cube_x=observation.cube_x,
-            cube_y=observation.cube_y,
-        )
 
         # =====================================================
         # 5. Get physical cube position

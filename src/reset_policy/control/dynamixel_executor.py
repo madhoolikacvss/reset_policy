@@ -80,10 +80,6 @@ MAX_ENCODER_TRAVEL = 10000
 # Diagnostic logging
 # ============================================================
 
-# ============================================================
-# Diagnostic logging
-# ============================================================
-
 DIAGNOSTIC_LOG_EVERY_N_ACTIONS = 1
 
 DIAGNOSTIC_LOG_DIR = (
@@ -188,38 +184,14 @@ class DynamixelExecutor:
 
         self._initialize_action_log()
 
-        from reset_policy.control.motor_logger import MotorLogger
-        self.logger = MotorLogger(
-            port_handler=port_handler,
-            packet_handler=packet_handler,
-            motor_ids=motor_ids,
-            log_frequency_hz=100.0,  # Log at 100 Hz
-            buffer_size=50000,
-        )
-        # self.logger.start()
+        # MotorLogger code removed
 
         self.current_episode = 0
         self.current_step = 0
-        
-
 
     # ========================================================
     # Diagnostic logging
     # ========================================================
-
-    def update_context(self, episode: int, step: int, action: np.ndarray = None,
-                       cube_x: float = None, cube_y: float = None):
-        """Update context from environment."""
-        self.current_episode = episode
-        self.current_step = step
-        if hasattr(self, 'logger'):
-            self.logger.update_context(
-                episode=episode,
-                step=step,
-                action=action,
-                cube_x=cube_x,
-                cube_y=cube_y,
-            )
 
     def _initialize_diagnostic_log(self):
 
@@ -1018,20 +990,9 @@ class DynamixelExecutor:
             reason="initialization"
         )
 
-        if hasattr(self, 'logger') and self.logger is not None:
-            print("Starting motor logger...")
-            self.logger.start()
-            print("Motor logger started")
-        
         print("Initialization complete.")
-        print(
-            "Initialization complete."
-        )
 
 
-    # ========================================================
-    # Execute RL action
-    # ========================================================
     # ========================================================
     # Execute RL action
     # ========================================================
@@ -1412,12 +1373,6 @@ class DynamixelExecutor:
         # ====================================================
         # Successful action
         # ====================================================
-
-        self.logger.update_context(
-            episode=self.current_episode,
-            step=self.current_step,
-            action=action,
-        )
 
         self._log_action(
             action=action,
@@ -2441,16 +2396,15 @@ class DynamixelExecutor:
         
         IMPORTANT: Order matters!
         1. Disable motors (uses port)
-        2. Stop logger (releases port)
-        3. Close port
+        2. Close port
         """
-        
+
         print("\n========== EXECUTOR SHUTDOWN ==========")
-        
+
         # =====================================================
-        # 1. Disable torque on all motors FIRST
+        # 1. Disable torque on all motors
         # =====================================================
-        
+
         print("Disabling motors...")
         for motor in self.motor_ids:
             try:
@@ -2458,29 +2412,11 @@ class DynamixelExecutor:
                 print(f"  Motor {motor}: torque disabled")
             except Exception as e:
                 print(f"  Motor {motor}: failed to disable torque: {e}")
-        
+
         # =====================================================
-        # 2. Stop the logger (releases the port)
+        # 2. Close the port
         # =====================================================
-        
-        if hasattr(self, 'logger') and self.logger is not None:
-            try:
-                print("Stopping motor logger...")
-                self.logger.stop(timeout=2.0)
-                print("Motor logger stopped")
-            except Exception as e:
-                print(f"Logger stop error: {e}")
-                # If logger stop fails, force it
-                try:
-                    self.logger.running = False
-                    self.logger._close_csv()
-                except:
-                    pass
-        
-        # =====================================================
-        # 3. Close the port
-        # =====================================================
-        
+
         if hasattr(self, 'port') and self.port is not None:
             try:
                 if self.port.is_open:
@@ -2488,5 +2424,5 @@ class DynamixelExecutor:
                     print("Port closed")
             except Exception as e:
                 print(f"Port close error: {e}")
-        
+
         print("========== SHUTDOWN COMPLETE ==========\n")
