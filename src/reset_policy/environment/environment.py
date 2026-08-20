@@ -538,6 +538,19 @@ class ResetPolicyEnv(gym.Env):
     # =========================================================
 
     def close(self):
-        self.executor.shutdown()
+        """Close the environment."""
+        
+        # Only shutdown executor if it hasn't been shut down yet
+        if hasattr(self, 'executor') and self.executor is not None:
+            try:
+                # Check if executor has already been shut down
+                if not hasattr(self.executor, '_shutdown_done'):
+                    self.executor.shutdown()
+                    self.executor._shutdown_done = True
+            except Exception as e:
+                print(f"Executor shutdown error in environment: {e}")
+        
         if self.renderer is not None:
             self.renderer.close()
+        
+        print("Environment closed")

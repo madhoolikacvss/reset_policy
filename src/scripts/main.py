@@ -470,76 +470,59 @@ def main():
 
 
     finally:
-
-        # -------------------------------------------------
-        # Environment cleanup
-        # -------------------------------------------------
-
+        print("\n=== CLEANUP START ===")
+        
+        # =====================================================
+        # 1. Close environment (this handles executor shutdown)
+        # =====================================================
+        
         if env is not None:
-
             try:
                 env.close()
-
+                print("Environment closed")
             except Exception as e:
-
-                print(
-                    f"Environment cleanup error: {e}"
-                )
-
-        else:
-
-            # If environment construction failed before
-            # env was created, shut down the executor
-            # directly if it exists.
-            if executor is not None:
-
-                try:
-                    executor.shutdown()
-
-                except Exception as e:
-
-                    print(
-                        f"Executor cleanup error: {e}"
-                    )
-
-
-        # -------------------------------------------------
-        # Camera cleanup
-        # -------------------------------------------------
-
+                print(f"Environment cleanup error: {e}")
+        
+        # =====================================================
+        # 2. Double-check executor (if env.close() failed)
+        # =====================================================
+        
+        if executor is not None:
+            # Check if executor still has a port
+            try:
+                if hasattr(executor, 'port') and executor.port is not None:
+                    if executor.port.is_open:
+                        print("Executor port still open, force closing...")
+                        executor.port.closePort()
+            except Exception as e:
+                print(f"Executor force close error: {e}")
+        
+        # =====================================================
+        # 3. Close cameras
+        # =====================================================
+        
         if cameras is not None:
-
             try:
                 cameras.close()
-
+                print("Cameras closed")
             except Exception as e:
-
-                print(
-                    f"Camera cleanup error: {e}"
-                )
-
-
-        # -------------------------------------------------
-        # Serial port cleanup
-        # -------------------------------------------------
-
+                print(f"Camera cleanup error: {e}")
+        
+        # =====================================================
+        # 4. Final port cleanup
+        # =====================================================
+        
         if port is not None:
-
             try:
-
                 if port.is_open:
-
                     port.closePort()
-
+                    print("Port closed")
+                else:
+                    print("Port already closed")
             except Exception as e:
-
-                print(
-                    f"Port cleanup error: {e}"
-                )
-
-        print(
-            "Shutdown complete"
-        )
+                print(f"Port cleanup error: {e}")
+        
+        print("=== CLEANUP COMPLETE ===")
 
 
 # =========================================================

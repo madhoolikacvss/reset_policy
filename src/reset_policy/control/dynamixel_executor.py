@@ -2430,12 +2430,33 @@ class DynamixelExecutor:
     # ========================================================
 
     def shutdown(self):
-
-        print(
-            "Disabling motors..."
-        )
-
-        # stopping logger
+        """
+        Shutdown motors and logger.
+        
+        IMPORTANT: Order matters!
+        1. Disable motors (uses port)
+        2. Stop logger (releases port)
+        3. Close port
+        """
+        
+        print("\n========== EXECUTOR SHUTDOWN ==========")
+        
+        # =====================================================
+        # 1. Disable torque on all motors FIRST
+        # =====================================================
+        
+        print("Disabling motors...")
+        for motor in self.motor_ids:
+            try:
+                self.write1(motor, ADDR_TORQUE_ENABLE, TORQUE_DISABLE)
+                print(f"  Motor {motor}: torque disabled")
+            except Exception as e:
+                print(f"  Motor {motor}: failed to disable torque: {e}")
+        
+        # =====================================================
+        # 2. Stop the logger (releases the port)
+        # =====================================================
+        
         if hasattr(self, 'logger') and self.logger is not None:
             try:
                 print("Stopping motor logger...")
@@ -2443,27 +2464,23 @@ class DynamixelExecutor:
                 print("Motor logger stopped")
             except Exception as e:
                 print(f"Logger stop error: {e}")
-
-        # disabling motors
-        for motor in self.motor_ids:
-
+                # If logger stop fails, force it
+                try:
+                    self.logger.running = False
+                    self.logger._close_csv()
+                except:
+                    pass
+        
+        # =====================================================
+        # 3. Close the port
+        # =====================================================
+        
+        if hasattr(self, 'port') and self.port is not None:
             try:
-
-                self.write1(
-                    motor,
-                    ADDR_TORQUE_ENABLE,
-                    TORQUE_DISABLE,
-                )
-
+                if self.port.is_open:
+                    self.port.closePort()
+                    print("Port closed")
             except Exception as e:
-
-                print(
-                    f"Motor {motor}: "
-                    f"failed to disable torque: "
-                    f"{e}"
-                )
-
-        print(
-            "Shutdown complete."
-        )
-
+                print(f"Port close error: {e}")
+        
+        print("========== SHUTDOWN COMPLETE ==========\n")
