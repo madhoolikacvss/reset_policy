@@ -9,3 +9,36 @@ grid_config:
 board:
   name: "board_bounds"
   world_tag_position: "top_right"
+
+# configs/safety_config.yaml
+
+safety_filter:
+  # Motor pairing
+  pair_horizontal: [16, 17]
+  pair_vertical: [18, 19]
+  
+  # Current thresholds (mA)
+  max_pair_current: 800.0
+  max_single_current: 600.0
+  
+  # Position limits (encoder ticks from initial)
+  max_position: 8000.0
+  
+  # Action scaling factors
+  current_scale_factor: 0.25      # Scale to 25% when over-current
+  position_scale_factor: 0.5      # Scale to 50% near position limits
+  
+  # Tension safety
+  tension_threshold: 0.7          # Max opposing action magnitude
+  
+  # Feature flags
+  enable_current_safety: true
+  enable_position_safety: true
+  enable_tension_safety: true
+  
+  # Logging
+  log_interventions: true
+  log_file: "logs/safety_interventions.csv"
+  
+  # Reward penalty for safety interventions
+  safety_penalty_weight: 2.0

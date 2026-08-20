@@ -32,6 +32,7 @@ from reset_policy.perception.cube_tracker import CubeTracker
 from reset_policy.control.dynamixel_executor import (
     DynamixelExecutor,
 )
+from reset_policy.control.safety_filter import create_safety_filter
 
 
 # =========================================================
@@ -345,7 +346,30 @@ def create_environment():
         y_max=y_max,
     )
 
-
+    # =====================================================
+    # Create Safety Filter
+    # =====================================================
+    
+    safety_config = {
+        'pair_horizontal': [16, 17],
+        'pair_vertical': [18, 19],
+        'max_pair_current': 800.0,    # mA
+        'max_single_current': 600.0,  # mA
+        'max_position': 8000.0,       # encoder ticks
+        'current_scale_factor': 0.25,
+        'position_scale_factor': 0.5,
+        'tension_threshold': 0.7,
+        'enable_current_safety': True,
+        'enable_position_safety': True,
+        'enable_tension_safety': True,
+        'log_interventions': True,
+    }
+    
+    safety_filter = create_safety_filter(
+        motor_ids=MOTOR_IDS,
+        config=safety_config,
+    )
+    
     # -----------------------------------------------------
     # Environment
     # -----------------------------------------------------
@@ -371,6 +395,8 @@ def create_environment():
         # Episode configuration
         max_steps=100,
         target_coverage=0.95,
+        safety_filter=safety_filter,
+        safety_penalty_weight=2.0,
     )
 
 
