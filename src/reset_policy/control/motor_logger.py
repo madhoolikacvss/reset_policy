@@ -155,10 +155,11 @@ class MotorLogger:
             if self.thread.is_alive():
                 print("Warning: Logger thread did not stop gracefully")
             else:
-                print("MotorLogger thread stopped")
+                pass
         
         # Close CSV file
         self._close_csv()
+        print("MotorLogger thread stopped")
         
     def _log_loop(self):
         """Main logging loop."""

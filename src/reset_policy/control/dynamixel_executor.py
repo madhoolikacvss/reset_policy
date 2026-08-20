@@ -2435,6 +2435,16 @@ class DynamixelExecutor:
             "Disabling motors..."
         )
 
+        # stopping logger
+        if hasattr(self, 'logger') and self.logger is not None:
+            try:
+                print("Stopping motor logger...")
+                self.logger.stop(timeout=2.0)
+                print("Motor logger stopped")
+            except Exception as e:
+                print(f"Logger stop error: {e}")
+
+        # disabling motors
         for motor in self.motor_ids:
 
             try:
