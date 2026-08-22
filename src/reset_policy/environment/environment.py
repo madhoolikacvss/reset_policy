@@ -227,6 +227,22 @@ class ResetPolicyEnv(gym.Env):
             # Use the last known-good observation
             observation = self.last_valid_observation
 
+            # If last_valid_observation is None, create a zero observation
+            if observation is None:
+                print("WARNING: No valid observation available, using zeros")
+                # Create a dummy observation with zeros
+                from observation import Observation
+                observation = Observation(
+                    cube_x=0.0,
+                    cube_y=0.0,
+                    cube_yaw=0.0,
+                    motor_positions=np.zeros(4, dtype=np.float32),
+                    motor_currents=np.zeros(4, dtype=np.float32),
+                    initial_motor_positions=np.zeros(4, dtype=np.float32),
+                    cube_x_norm=0.0,
+                    cube_y_norm=0.0,
+                )
+
             # Compute reward with hardware error penalty
             reward_info = self.reward_fn.compute(
                 visitation_count=0,
@@ -302,6 +318,21 @@ class ResetPolicyEnv(gym.Env):
             # Use the last valid observation
             observation = self.last_valid_observation
 
+            # If last_valid_observation is None, create a zero observation
+            if observation is None:
+                print("WARNING: No valid observation available, using zeros")
+                from observation import Observation
+                observation = Observation(
+                    cube_x=0.0,
+                    cube_y=0.0,
+                    cube_yaw=0.0,
+                    motor_positions=np.zeros(4, dtype=np.float32),
+                    motor_currents=np.zeros(4, dtype=np.float32),
+                    initial_motor_positions=np.zeros(4, dtype=np.float32),
+                    cube_x_norm=0.0,
+                    cube_y_norm=0.0,
+                )
+
             # Compute reward with hardware error penalty
             reward_info = self.reward_fn.compute(
                 visitation_count=0,
@@ -347,6 +378,72 @@ class ResetPolicyEnv(gym.Env):
             )
 
         # -----------------------------------------------------
+        # Observation succeeded - but check if observation is None
+        # -----------------------------------------------------
+
+        if observation_result.observation is None:
+            print("ERROR: Observation result is None!")
+            # Use the last valid observation if available
+            observation = self.last_valid_observation
+            if observation is None:
+                # Fallback to zeros
+                print("WARNING: No valid observation available, using zeros")
+                from observation import Observation
+                observation = Observation(
+                    cube_x=0.0,
+                    cube_y=0.0,
+                    cube_yaw=0.0,
+                    motor_positions=np.zeros(4, dtype=np.float32),
+                    motor_currents=np.zeros(4, dtype=np.float32),
+                    initial_motor_positions=np.zeros(4, dtype=np.float32),
+                    cube_x_norm=0.0,
+                    cube_y_norm=0.0,
+                )
+            
+            # Get cube position
+            x = observation.cube_x
+            y = observation.cube_y
+            
+            # Compute reward with zero visitation
+            visits = 0
+            reward_info = self.reward_fn.compute(
+                visitation_count=visits,
+                motor_currents=observation.motor_currents,
+                hardware_error=True,
+            )
+            reward = reward_info.total
+            
+            info = {
+                "coverage": self.grid.coverage(),
+                "visits": 0,
+                "coverage_reward": 0.0,
+                "current_reward": reward_info.current_reward,
+                "current_change_penalty": reward_info.current_change_penalty,
+                "hardware_error_penalty": reward_info.hardware_error_penalty,
+                "max_current": 0.0,
+                "motor_currents": np.zeros(4),
+                "hardware_error": False,
+                "hardware_error_ids": [],
+                "hardware_error_status": {},
+                "execution_success": True,
+                "cube_position": (x, y),
+                "termination_reason": "observation_failed",
+                "action_modified": action_modified,
+                "safety_reason": safety_reason,
+                "safety_detail": safety_detail,
+                "safety_penalty": 0.0,
+                "modification_magnitude": modification_magnitude,
+            }
+            
+            return (
+                observation.as_numpy(),
+                reward,
+                True,  # terminate on observation failure
+                False,
+                info,
+            )
+
+        # -----------------------------------------------------
         # Observation succeeded
         # -----------------------------------------------------
 
@@ -388,17 +485,15 @@ class ResetPolicyEnv(gym.Env):
         
         if action_modified and self.safety_penalty_weight > 0:
             # Penalty proportional to how much the action was modified
-            # This teaches PPO: "Don't output actions that need filtering"
             safety_penalty = -self.safety_penalty_weight * (1.0 + modification_magnitude)
             
             # Add extra penalty for dangerous actions
             dangerous_keywords = ["over_current", "tension", "opposing"]
             if any(kw in safety_reason for kw in dangerous_keywords):
-                safety_penalty *= 1.5  # Extra penalty for dangerous actions
+                safety_penalty *= 1.5
             
             reward += safety_penalty
             
-            # Log the penalty
             print(
                 f"  [SAFETY PENALTY] {safety_penalty:.2f} "
                 f"(reason: {safety_reason}, magnitude: {modification_magnitude:.3f})"

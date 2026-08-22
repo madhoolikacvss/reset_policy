@@ -5,6 +5,7 @@ import torch
 torch.autograd.set_detect_anomaly(True)
 
 import yaml
+import argparse
 
 import sys
 from pathlib import Path
@@ -353,15 +354,24 @@ def create_environment():
     safety_config = {
         'pair_horizontal': [16, 17],
         'pair_vertical': [18, 19],
-        'max_pair_current': 800.0,    # mA
-        'max_single_current': 600.0,  # mA
-        'max_position': 8000.0,       # encoder ticks
+        'max_pair_current': 800.0,
+        'max_single_current': 600.0,
+        'max_position': 8000.0,
+        'min_voltage': 4.0,
+        'critical_voltage': 3.5,
+        'voltage_scale_factor': 0.3,
+        'heavy_load_threshold': 400.0,       # <-- NEW
+        'critical_load_threshold': 700.0,    # <-- NEW
+        'heavy_load_scale': 0.3,             # <-- NEW
+        'moderate_load_scale': 0.6,          # <-- NEW
         'current_scale_factor': 0.25,
         'position_scale_factor': 0.5,
         'tension_threshold': 0.7,
         'enable_current_safety': True,
         'enable_position_safety': True,
         'enable_tension_safety': True,
+        'enable_voltage_safety': True,
+        'enable_current_aware_safety': True, # <-- NEW
         'log_interventions': True,
     }
     
@@ -414,6 +424,12 @@ def create_environment():
 
 def main():
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--resume', type=str, help='Path to checkpoint file to resume from')
+    parser.add_argument('--episodes', type=int, default=1000, help='Number of episodes to train')
+    parser.add_argument('--save_every', type=int, default=5, help='Save checkpoint every N episodes')
+    args = parser.parse_args()
+
     env = None
     cameras = None
     executor = None
@@ -438,10 +454,10 @@ def main():
 
         actor_critic = train(
             env,
-            episodes=1000,
-            save_every=50,
+            episodes=args.episodes,
+            save_every=args.save_every,
+            resume_from=args.resume,
         )
-
         print(
             "Training finished"
         )

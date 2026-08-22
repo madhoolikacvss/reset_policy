@@ -241,7 +241,6 @@ class ObservationBuilder:
         )
 
         if not cube_state.detected:
-
             return ObservationResult(
                 observation=None,
                 hardware_error=False,
@@ -404,19 +403,3 @@ class ObservationBuilder:
             observation=observation,
             hardware_error=False,
         )
-
-
-    # # Convenience method
-    # def get_observation(self) -> Observation:
-
-    #     result = (
-    #         self.get_observation_result()
-    #     )
-
-    #     if result.observation is None:
-
-    #         raise RuntimeError(
-    #             result.error_message
-    #         )
-
-    #     return result.observation

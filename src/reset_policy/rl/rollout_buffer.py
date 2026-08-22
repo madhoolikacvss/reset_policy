@@ -32,6 +32,10 @@ class RolloutBuffer:
         self.values.append(value) 
         self.log_probs.append(log_prob)
 
+    def __len__(self):
+        """Return the number of stored transitions."""
+        return len(self.states)
+
     def get(self):
         """
         Convert everything into tensors.
