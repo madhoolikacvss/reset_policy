@@ -116,6 +116,21 @@ class ResetPolicyEnv(gym.Env):
     # =========================================================
     # RESET
     # =========================================================
+    def _get_center_positions(self):
+        """Get motor positions for board center."""
+        # Use initial positions from startup as the center
+        if self.needs_recovery:
+            print("  Recovering from out-of-bounds...")
+            if self.episode_start_positions is not None:
+                target = self.episode_start_positions
+            else:
+                # Use center positions as fallback
+                target = self._get_center_positions()
+            
+            if target is not None:
+                self.executor.move_to_positions_gradual(target)
+            self.needs_recovery = False
+
     def reset(self, *, seed=None, options=None):
 
         super().reset(seed=seed)
@@ -154,13 +169,17 @@ class ResetPolicyEnv(gym.Env):
 
         observation = result.observation
         
+        positions = self.executor.read_positions()
+        if positions is not None:
+            self.episode_start_positions = {motor: pos for motor, pos in zip(self.executor.motor_ids, positions)}
+        self.episode_start_step = 1  # Mark that we've started
+
         # Mark starting cube position
         self.grid.visit(
             observation.cube_x,
             observation.cube_y,
         )
         self.last_valid_observation = observation
-
         return observation.as_numpy(), {}
 
     # STEP
