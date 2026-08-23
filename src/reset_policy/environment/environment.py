@@ -110,6 +110,9 @@ class ResetPolicyEnv(gym.Env):
         # Cache for last valid observation
         self.last_valid_observation = None
 
+        self.episode_start_positions = None
+        self.needs_recovery = False
+
     # =========================================================
     # RESET
     # =========================================================
@@ -121,18 +124,20 @@ class ResetPolicyEnv(gym.Env):
         print("\n================ ENV RESET ================ ")
         self.reward_fn.prev_currents = None
 
-        # 1. Recover physical hardware
-        self.executor.recovery()
+        if self.needs_recovery and self.episode_start_positions is not None:
+            print("  Recovering from out-of-bounds...")
+            self.executor.move_to_positions_gradual(self.episode_start_positions)
+            self.needs_recovery = False
         
-        # 2. Reset episode bookkeeping
+        # Reset episode bookkeeping
         self.grid.reset()
         self.step_count = 0
         self.safety_interventions_episode = 0
         
-        # 3. Establish initial motor positions AFTER recovery
+        # Establish initial motor positions AFTER recovery
         self.obs_builder.reset()
 
-        # 4. Get first observation
+        # Get first observation
         result = self.obs_builder.get_observation_result()
 
         if result.hardware_error:
@@ -149,7 +154,7 @@ class ResetPolicyEnv(gym.Env):
 
         observation = result.observation
         
-        # 5. Mark starting cube position
+        # Mark starting cube position
         self.grid.visit(
             observation.cube_x,
             observation.cube_y,
@@ -245,6 +250,7 @@ class ResetPolicyEnv(gym.Env):
                     vertical_tension=0.0,
                     total_tension=0.0,
                 )
+
             # Compute reward with hardware error penalty
             reward_info = self.reward_fn.compute(
                 visitation_count=0,
@@ -282,7 +288,7 @@ class ResetPolicyEnv(gym.Env):
             }
 
             return (
-                observation.as_numpy() if observation else np.zeros(11),
+                observation.as_numpy() if observation else np.zeros(14),
                 reward,
                 True,  # terminated
                 False,  # truncated
@@ -333,6 +339,9 @@ class ResetPolicyEnv(gym.Env):
                     initial_motor_positions=np.zeros(4, dtype=np.float32),
                     cube_x_norm=0.0,
                     cube_y_norm=0.0,
+                    horizontal_tension=0.0,
+                    vertical_tension=0.0,
+                    total_tension=0.0,
                 )
 
             # Compute reward with hardware error penalty
@@ -372,7 +381,7 @@ class ResetPolicyEnv(gym.Env):
             }
 
             return (
-                observation.as_numpy() if observation else np.zeros(11),
+                observation.as_numpy() if observation else np.zeros(14),
                 reward,
                 True,  # terminated
                 False,  # truncated
@@ -400,6 +409,9 @@ class ResetPolicyEnv(gym.Env):
                     initial_motor_positions=np.zeros(4, dtype=np.float32),
                     cube_x_norm=0.0,
                     cube_y_norm=0.0,
+                    horizontal_tension=0.0,
+                    vertical_tension=0.0,
+                    total_tension=0.0,
                 )
             
             # Get cube position
@@ -532,6 +544,11 @@ class ResetPolicyEnv(gym.Env):
         elif out_of_bounds:
             terminated = True
             termination_reason = "out_of_bounds"
+            # Store start positions for recovery on next reset
+            positions = self.executor.read_positions()
+            if positions is not None:
+                self.episode_start_positions = {motor: pos for motor, pos in zip(self.executor.motor_ids, positions)}
+            self.needs_recovery = True
         elif coverage_done:
             terminated = True
             termination_reason = "coverage"

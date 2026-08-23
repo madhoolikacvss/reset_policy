@@ -771,262 +771,34 @@ class DynamixelExecutor:
 
         return errors if errors else ["No hardware error"]
 
-    # ========================================================
-    # Recovery
-    # ========================================================
-
-    def recovery(self):
-        """Recover Dynamixels and return them to their initial encoder positions."""
-        print("\n================ RECOVERY ================")
-
-        # 1. Capture pre-recovery diagnostics
-        print("Capturing pre-recovery motor diagnostics...")
-        self.log_all_motor_diagnostics(reason="PRE_RECOVERY")
-
-        # 2. Detect issues
-        motors_to_reboot = []
-        motors_with_voltage_error = []
-        motors_with_communication_loss = []
-        motors_with_corruption = []
-        hardware_statuses = {}
-
-        for motor in self.motor_ids:
-            status, packet_error = self.read_hardware_error_with_packet_error(motor)
-            hardware_statuses[motor] = status
-            print(f"Motor {motor}: hardware status={status}, packet error={packet_error}")
-
-            is_hardware_fault = False
-            is_voltage_error = False
-            is_communication_error = False
-
-            # Check communication issue
-            if packet_error is not None:
-                is_communication_error = True
-                print(f"  Motor {motor}: Communication issue (packet_error=0x{packet_error:02X})")
-
-            # Check hardware status
-            if status is not None and status != 0:
-                voltage_bit = 0x01
-                overheat_bit = 0x04
-                shock_bit = 0x10
-                overload_bit = 0x20
-
-                if status & voltage_bit:
-                    is_voltage_error = True
-                    print(f"  Motor {motor}: Voltage error (status=0x{status:02X}) - will retry")
-
-                if status & (overheat_bit | shock_bit | overload_bit):
-                    is_hardware_fault = True
-                    print(f"  Motor {motor}: Hardware fault (status=0x{status:02X})")
-
-            # Check position corruption
-            pos = self.read_position(motor)
-            if pos is not None and motor in self.initial_positions:
-                initial = self.initial_positions[motor]
-                if abs(pos - initial) > 15000:
-                    print(f"  Motor {motor}: Position corruption detected! Position: {pos}, Initial: {initial}")
-                    motors_with_corruption.append(motor)
-
-            if is_hardware_fault:
-                motors_to_reboot.append(motor)
-            elif is_voltage_error:
-                motors_with_voltage_error.append(motor)
-            elif is_communication_error:
-                motors_with_communication_loss.append(motor)
-
-        # 3. Fix corruption FIRST (before moving motors)
-        if motors_with_corruption:
-            print(f"\nMotors with position corruption: {motors_with_corruption}")
-            for motor in motors_with_corruption:
-                initial = self.initial_positions[motor]
-                print(f"  Fixing motor {motor} position...")
-
-                success = self._write_goal_position_direct(motor, initial)
-                time.sleep(0.2)
-
-                new_pos = self.read_position(motor)
-                if new_pos is not None and abs(new_pos - initial) <= 15000:
-                    print(f"    Motor {motor} fixed! Position: {new_pos}")
-                else:
-                    print(f"    Motor {motor} still corrupted: {new_pos}")
-                    try:
-                        self.write1(motor, ADDR_TORQUE_ENABLE, TORQUE_DISABLE)
-                        time.sleep(0.1)
-                        self.write1(motor, ADDR_TORQUE_ENABLE, TORQUE_ENABLE)
-                        time.sleep(0.2)
-                        self._write_goal_position_direct(motor, initial)
-                        time.sleep(0.2)
-                        new_pos = self.read_position(motor)
-                        if new_pos is not None and abs(new_pos - initial) <= 15000:
-                            print(f"    Motor {motor} fixed after torque cycle!")
-                        else:
-                            print(f"    Motor {motor} still corrupted - adding to reboot list")
-                            motors_to_reboot.append(motor)
-                    except Exception as e:
-                        print(f"    Torque cycle failed: {e}")
-                        motors_to_reboot.append(motor)
-
-        # 4. Handle voltage/communication errors
-        all_issue_motors = set(motors_with_voltage_error + motors_with_communication_loss)
-        if all_issue_motors:
-            print(f"\nMotors with voltage/communication issues: {list(all_issue_motors)}")
-            print("Waiting 1 second for voltage to stabilize...")
-            time.sleep(1.0)
-
-            for motor in all_issue_motors:
-                print(f"Re-checking motor {motor}...")
-                pos = self.read_position(motor)
-                if pos is not None:
-                    print(f"  Motor {motor} recovered, position={pos}")
-                    if motor in self.hardware_error_ids:
-                        self.hardware_error_ids.remove(motor)
-                        self.hardware_error_status[motor] = 0
-                else:
-                    print(f"  Motor {motor} still having communication issues, trying soft reset...")
-                    if self.soft_reset_motor(motor):
-                        print(f"  Motor {motor} soft reset successful")
-                    else:
-                        print(f"  Motor {motor} soft reset failed - will continue with caution")
-
-        # 5. Reboot affected motors
-        if motors_to_reboot:
-            print(f"\nMotors requiring reboot (hardware fault): {motors_to_reboot}")
-            for motor in motors_to_reboot:
-                print(f"\nRebooting motor {motor}...")
-                self.log_motor_diagnostics(motor, reason="BEFORE_REBOOT", hardware_status=hardware_statuses.get(motor))
-
-                if not self.reboot_motor(motor):
-                    self.log_motor_diagnostics(motor, reason="REBOOT_FAILED")
-                    raise RuntimeError(f"Motor {motor} reboot failed.")
-
-            time.sleep(0.5)
-        else:
-            print("No motors require reboot (no real hardware faults detected).")
-
-        # 6. Verify communication on ALL motors
-        print("\nVerifying motor communication...")
-        for motor in self.motor_ids:
-            pos = self.read_position(motor)
-            if pos is None:
-                self.log_motor_diagnostics(motor, reason="COMM_VERIFICATION_FAILURE")
-                time.sleep(0.1)
-                pos = self.read_position(motor)
-                if pos is None:
-                    raise RuntimeError(f"Motor {motor} communication verification failed.")
-            print(f"Motor {motor}: communication restored, position={pos}")
-
-        # 7-9. Disable torque, restore mode, re-enable torque
-        print("\nDisabling torque...")
-        for motor in self.motor_ids:
-            try:
-                self.write1(motor, ADDR_TORQUE_ENABLE, TORQUE_DISABLE)
-            except Exception as e:
-                print(f"Motor {motor}: failed to disable torque: {e}")
-
-        print("Restoring extended position mode...")
-        for motor in self.motor_ids:
-            try:
-                self.write1(motor, ADDR_OPERATING_MODE, EXTENDED_POSITION_MODE)
-            except Exception as e:
-                print(f"Motor {motor}: failed to set mode: {e}")
-
-        print("Re-enabling torque...")
-        for motor in self.motor_ids:
-            try:
-                self.write1(motor, ADDR_TORQUE_ENABLE, TORQUE_ENABLE)
-            except Exception as e:
-                print(f"Motor {motor}: failed to enable torque: {e}")
-
-        # 10. Return to initial positions (individually)
-        print("Commanding return to center (individual moves)...")
-        for motor in self.motor_ids:
-            target = self.initial_positions[motor]
-            current = self.read_position(motor)
-
-            if current is None:
-                print(f"Motor {motor}: Cannot read current position, skipping move")
-                continue
-
-            print(f"  Motor {motor}: {current} → {target}")
-            if not self._write_goal_position_direct(motor, target):
-                print(f"  Motor {motor}: Failed to move to target")
+    def move_to_positions_gradual(self, target_positions: dict, step_size: int = 200):
+        """
+        Move motors to target positions in small steps.
+        """
+        # Read current positions
+        current = self.read_positions()
+        if current is None:
+            print("  Failed to read current positions")
+            return
+        
+        current_dict = {motor: pos for motor, pos in zip(self.motor_ids, current)}
+        
+        # Calculate max steps needed
+        max_dist = max(abs(target_positions.get(m, current_dict[m]) - current_dict[m]) 
+                    for m in self.motor_ids)
+        num_steps = max(1, int(max_dist / step_size) + 1)
+        
+        print(f"  Moving gradually in {num_steps} steps")
+        
+        for step in range(num_steps):
+            progress = (step + 1) / num_steps
+            for motor in self.motor_ids:
+                target = target_positions.get(motor, current_dict[motor])
+                intermediate = int(current_dict[motor] + (target - current_dict[motor]) * progress)
+                self._write_goal_position_direct(motor, intermediate)
             time.sleep(0.05)
-
-        # 11. Wait for movement
-        print("Waiting for movement to complete...")
-        time.sleep(1.0)
-
-        # 12. Post-recovery diagnostics
-        print("\nPost-recovery motor diagnostics...")
-        self.log_all_motor_diagnostics(reason="POST_RECOVERY")
-
-        # 13. Verify positions
-        for motor in self.motor_ids:
-            pos = self.read_position(motor)
-            target = self.initial_positions[motor]
-
-            if pos is None:
-                raise RuntimeError(f"Motor {motor} failed post-recovery verification.")
-
-            if abs(pos - target) > 1000:
-                print(f"WARNING: Motor {motor} position {pos} is far from target {target}")
-                self._write_goal_position_direct(motor, target)
-                time.sleep(0.2)
-                new_pos = self.read_position(motor)
-                if new_pos is not None and abs(new_pos - target) <= 1000:
-                    print(f"  Motor {motor} corrected: {new_pos}")
-                else:
-                    print(f"  Motor {motor} still off: {new_pos}")
-
-            print(f"Motor {motor}: post-recovery position={pos}")
-
-        # 14. Clear software error state
-        self.clear_hardware_errors()
-        print("Recovery complete.")
-        print("==========================================\n")
-
-    def soft_reset_motor(self, motor_id):
-        """Soft reset a motor that has lost communication."""
-        print(f"  Soft resetting motor {motor_id}...")
-        try:
-            self.write1(motor_id, ADDR_TORQUE_ENABLE, TORQUE_DISABLE)
-            time.sleep(0.05)
-            self.write1(motor_id, ADDR_TORQUE_ENABLE, TORQUE_ENABLE)
-            time.sleep(0.05)
-
-            pos = self.read_position(motor_id)
-            if pos is not None:
-                print(f"    Motor {motor_id} soft reset successful, position={pos}")
-                return True
-            print(f"    Motor {motor_id} soft reset failed - no position read")
-            return False
-        except Exception as e:
-            print(f"    Motor {motor_id} soft reset error: {e}")
-            return False
-
-    # ========================================================
-    # Reboot
-    # ========================================================
-
-    def reboot_motor(self, motor_id):
-        print(f"\n========== REBOOT MOTOR {motor_id} ==========")
-
-        comm, error = self.packet.reboot(self.port, motor_id)
-        print(f"Reboot communication result: {comm}")
-        print(f"Reboot packet error: {error}")
-
-        if comm != COMM_SUCCESS:
-            print(f"Reboot communication error: {self.packet.getTxRxResult(comm)}")
-            return False
-
-        if error != 0:
-            print(f"Motor returned packet error: 0x{error:02X}")
-            print(f"Description: {self.packet.getRxPacketError(error)}")
-            return False
-
-        time.sleep(0.5)
-        print(f"Motor {motor_id} reboot completed.")
-        return True
+        
+        print("  Gradual move complete")
 
     # ========================================================
     # Shutdown
