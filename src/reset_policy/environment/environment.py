@@ -74,7 +74,7 @@ class ResetPolicyEnv(gym.Env):
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
-            shape=(11,),
+            shape=(14,),
             dtype=np.float32,
         )
 
@@ -240,9 +240,11 @@ class ResetPolicyEnv(gym.Env):
                     motor_currents=np.zeros(4, dtype=np.float32),
                     initial_motor_positions=np.zeros(4, dtype=np.float32),
                     cube_x_norm=0.0,
-                    cube_y_norm=0.0,
+                    cube_y_norm=0.0, 
+                    horizontal_tension=0.0,
+                    vertical_tension=0.0,
+                    total_tension=0.0,
                 )
-
             # Compute reward with hardware error penalty
             reward_info = self.reward_fn.compute(
                 visitation_count=0,
@@ -409,7 +411,7 @@ class ResetPolicyEnv(gym.Env):
             reward_info = self.reward_fn.compute(
                 visitation_count=visits,
                 motor_currents=observation.motor_currents,
-                hardware_error=True,
+                hardware_error=False,
             )
             reward = reward_info.total
             

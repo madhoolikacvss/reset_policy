@@ -18,8 +18,8 @@ from control.dynamixel_executor import DynamixelExecutor
 # ============================================================
 
 CURRENT_LIMIT = 1750.0
-
 MAX_POSITION_DELTA = 4000.0
+TENSION_LIMIT = 2000.0  # Max expected tension in mA
 
 
 # ============================================================
@@ -56,6 +56,14 @@ class Observation:
 
     cube_x_norm: float
     cube_y_norm: float
+
+    # --------------------------------------------------------
+    # Tension metrics (NEW)
+    # --------------------------------------------------------
+
+    horizontal_tension: float = 0.0  # sum of abs currents for motors 16,17
+    vertical_tension: float = 0.0    # sum of abs currents for motors 18,19
+    total_tension: float = 0.0       # sum of all currents
 
     # --------------------------------------------------------
     # Convert to PPO observation
@@ -110,8 +118,46 @@ class Observation:
         )
 
         # ----------------------------------------------------
-        # Final PPO observation
+        # Tension normalization (NEW)
         # ----------------------------------------------------
+
+        horizontal_tension_norm = np.clip(
+            self.horizontal_tension / TENSION_LIMIT,
+            0.0,
+            1.0,
+        )
+
+        vertical_tension_norm = np.clip(
+            self.vertical_tension / TENSION_LIMIT,
+            0.0,
+            1.0,
+        )
+
+        total_tension_norm = np.clip(
+            self.total_tension / TENSION_LIMIT,
+            0.0,
+            1.0,
+        )
+
+        # ----------------------------------------------------
+        # Final PPO observation (14 dimensions)
+        # ----------------------------------------------------
+        #
+        # Index mapping:
+        #   0:  cube_x_norm
+        #   1:  cube_y_norm
+        #   2:  cube_yaw_norm
+        #   3:  position_delta_16
+        #   4:  position_delta_17
+        #   5:  position_delta_18
+        #   6:  position_delta_19
+        #   7:  current_16
+        #   8:  current_17
+        #   9:  current_18
+        #   10: current_19
+        #   11: horizontal_tension_norm  (NEW)
+        #   12: vertical_tension_norm    (NEW)
+        #   13: total_tension_norm       (NEW)
 
         obs = np.concatenate(
             [
@@ -130,6 +176,16 @@ class Observation:
 
                 current_norm.astype(
                     np.float32
+                ),
+
+                # NEW: Tension features
+                np.array(
+                    [
+                        horizontal_tension_norm,
+                        vertical_tension_norm,
+                        total_tension_norm,
+                    ],
+                    dtype=np.float32,
                 ),
             ]
         )
@@ -341,6 +397,20 @@ class ObservationBuilder:
         )
 
         # ----------------------------------------------------
+        # Calculate tension metrics (NEW)
+        # ----------------------------------------------------
+        #
+        # Horizontal pair: motors 16, 17 (indices 0, 1)
+        # Vertical pair: motors 18, 19 (indices 2, 3)
+        #
+        # Tension = sum of absolute currents in a pair
+        # High tension = motors fighting each other
+
+        horizontal_tension = abs(motor_currents[0]) + abs(motor_currents[1])
+        vertical_tension = abs(motor_currents[2]) + abs(motor_currents[3])
+        total_tension = horizontal_tension + vertical_tension
+
+        # ----------------------------------------------------
         # Normalize cube position
         # ----------------------------------------------------
 
@@ -377,7 +447,7 @@ class ObservationBuilder:
             )
         )
 
-        # Build observation
+        # Build observation with tension metrics
         observation = Observation(
 
             cube_x=cube_state.x,
@@ -397,6 +467,11 @@ class ObservationBuilder:
             cube_x_norm=cube_x_norm,
 
             cube_y_norm=cube_y_norm,
+
+            # NEW: Tension metrics
+            horizontal_tension=float(horizontal_tension),
+            vertical_tension=float(vertical_tension),
+            total_tension=float(total_tension),
         )
 
         return ObservationResult(
