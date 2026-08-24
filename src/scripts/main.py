@@ -52,6 +52,7 @@ from reset_policy.environment.observation import (
 from reset_policy.environment.environment import (
     ResetPolicyEnv,
 )
+from reset_policy.environment.renderer import BoardRenderer
 
 
 # =========================================================
@@ -384,6 +385,14 @@ def create_environment():
     # Environment
     # -----------------------------------------------------
 
+    renderer = BoardRenderer(
+        board_width=x_max - x_min,
+        board_height=y_max - y_min,
+        cell_size=1,
+        save_every_n=5,  # Save every 5 episodes
+        max_saved_plots=200,
+    )
+
     env = ResetPolicyEnv(
         executor=executor,
         observation_builder=observation_builder,
@@ -447,6 +456,8 @@ def main():
         print(
             "\nEnvironment initialized"
         )
+
+        
 
         # -------------------------------------------------
         # PPO Training

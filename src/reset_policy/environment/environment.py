@@ -71,6 +71,7 @@ class ResetPolicyEnv(gym.Env):
 
         self.action_duration = action_duration
 
+        # Updated observation space to 14 dimensions (added tension features)
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
@@ -88,7 +89,14 @@ class ResetPolicyEnv(gym.Env):
         self.render_mode = render_mode
 
         if self.render_mode in ("human", "rgb_array"):
-            self.renderer = BoardRenderer()
+            self.renderer = BoardRenderer(
+                board_width=(self.grid.x_max - self.grid.x_min) * 100,  # convert to cm
+                board_height=(self.grid.y_max - self.grid.y_min) * 100,  # convert to cm
+                cell_size=self.grid.cell_size * 100,  # convert to cm,
+                # save_every = 5, 
+                # interactive=False, 
+
+            )
         else:
             self.renderer = None
 
@@ -109,50 +117,38 @@ class ResetPolicyEnv(gym.Env):
         
         # Cache for last valid observation
         self.last_valid_observation = None
-
-        self.episode_start_positions = None
+        
+        # Track if we need recovery on next reset
         self.needs_recovery = False
 
     # =========================================================
     # RESET
     # =========================================================
-    def _get_center_positions(self):
-        """Get motor positions for board center."""
-        # Use initial positions from startup as the center
-        if self.needs_recovery:
-            print("  Recovering from out-of-bounds...")
-            if self.episode_start_positions is not None:
-                target = self.episode_start_positions
-            else:
-                # Use center positions as fallback
-                target = self._get_center_positions()
-            
-            if target is not None:
-                self.executor.move_to_positions_gradual(target)
-            self.needs_recovery = False
-
     def reset(self, *, seed=None, options=None):
 
         super().reset(seed=seed)
         self.episode_count += 1
-
+        time.sleep(1)
         print("\n================ ENV RESET ================ ")
         self.reward_fn.prev_currents = None
 
-        if self.needs_recovery and self.episode_start_positions is not None:
-            print("  Recovering from out-of-bounds...")
-            self.executor.move_to_positions_gradual(self.episode_start_positions)
+        # 1. Recover physical hardware ONLY if needed
+        if self.needs_recovery:
+            print("Recovering from hardware error...")
+            self.executor.recovery()
             self.needs_recovery = False
+        else:
+            print("No hardware error - skipping recovery")
         
-        # Reset episode bookkeeping
+        # 2. Reset episode bookkeeping
         self.grid.reset()
         self.step_count = 0
         self.safety_interventions_episode = 0
         
-        # Establish initial motor positions AFTER recovery
+        # 3. Establish initial motor positions AFTER recovery
         self.obs_builder.reset()
 
-        # Get first observation
+        # 4. Get first observation
         result = self.obs_builder.get_observation_result()
 
         if result.hardware_error:
@@ -169,17 +165,13 @@ class ResetPolicyEnv(gym.Env):
 
         observation = result.observation
         
-        positions = self.executor.read_positions()
-        if positions is not None:
-            self.episode_start_positions = {motor: pos for motor, pos in zip(self.executor.motor_ids, positions)}
-        self.episode_start_step = 1  # Mark that we've started
-
-        # Mark starting cube position
+        # 5. Mark starting cube position
         self.grid.visit(
             observation.cube_x,
             observation.cube_y,
         )
         self.last_valid_observation = observation
+
         return observation.as_numpy(), {}
 
     # STEP
@@ -187,7 +179,6 @@ class ResetPolicyEnv(gym.Env):
         # Clamp action to valid range
         action = np.clip(action, -1.0, 1.0)
         self.step_count += 1
-
         # =====================================================
         # 1. APPLY SAFETY FILTER (BEFORE EXECUTION)
         # =====================================================
@@ -202,6 +193,7 @@ class ResetPolicyEnv(gym.Env):
         # Get current motor state for safety filter
         positions = self.executor.read_positions()
         currents = self.executor.read_currents()
+        voltages = self.executor.read_voltages()  # <-- ADDED: Read voltages
         initial_positions = self.obs_builder.initial_motor_positions
         
         if self.safety_filter is not None and positions is not None and currents is not None:
@@ -211,6 +203,7 @@ class ResetPolicyEnv(gym.Env):
                     currents=np.array(currents),
                     positions=np.array(positions),
                     initial_positions=initial_positions,
+                    voltages=np.array(voltages) if voltages is not None else None,  # <-- ADDED
                     action_count=self.step_count,
                 )
                 
@@ -244,6 +237,8 @@ class ResetPolicyEnv(gym.Env):
         # -----------------------------------------------------
 
         if execution_result.hardware_error:
+            self.needs_recovery = True
+            
             print("Hardware error during action execution.")
             print(f"Hardware error IDs: {execution_result.hardware_error_ids}")
             print(f"Hardware error status: {execution_result.hardware_error_status}")
@@ -254,7 +249,6 @@ class ResetPolicyEnv(gym.Env):
             # If last_valid_observation is None, create a zero observation
             if observation is None:
                 print("WARNING: No valid observation available, using zeros")
-                # Create a dummy observation with zeros
                 from observation import Observation
                 observation = Observation(
                     cube_x=0.0,
@@ -264,10 +258,7 @@ class ResetPolicyEnv(gym.Env):
                     motor_currents=np.zeros(4, dtype=np.float32),
                     initial_motor_positions=np.zeros(4, dtype=np.float32),
                     cube_x_norm=0.0,
-                    cube_y_norm=0.0, 
-                    horizontal_tension=0.0,
-                    vertical_tension=0.0,
-                    total_tension=0.0,
+                    cube_y_norm=0.0,
                 )
 
             # Compute reward with hardware error penalty
@@ -304,6 +295,8 @@ class ResetPolicyEnv(gym.Env):
                 "safety_detail": safety_detail,
                 "safety_penalty": safety_penalty,
                 "modification_magnitude": modification_magnitude,
+                # NEW: Tension penalty from reward function
+                "tension_penalty": reward_info.tension_penalty,
             }
 
             return (
@@ -338,6 +331,8 @@ class ResetPolicyEnv(gym.Env):
         # -----------------------------------------------------
 
         if observation_result.hardware_error:
+            self.needs_recovery = True
+            
             print("Hardware error while reading observation.")
             print(f"Hardware error IDs: {observation_result.hardware_error_ids}")
             print(f"Hardware error status: {observation_result.hardware_error_status}")
@@ -358,9 +353,6 @@ class ResetPolicyEnv(gym.Env):
                     initial_motor_positions=np.zeros(4, dtype=np.float32),
                     cube_x_norm=0.0,
                     cube_y_norm=0.0,
-                    horizontal_tension=0.0,
-                    vertical_tension=0.0,
-                    total_tension=0.0,
                 )
 
             # Compute reward with hardware error penalty
@@ -397,6 +389,8 @@ class ResetPolicyEnv(gym.Env):
                 "safety_detail": safety_detail,
                 "safety_penalty": safety_penalty,
                 "modification_magnitude": modification_magnitude,
+                # NEW: Tension penalty from reward function
+                "tension_penalty": reward_info.tension_penalty,
             }
 
             return (
@@ -412,6 +406,8 @@ class ResetPolicyEnv(gym.Env):
         # -----------------------------------------------------
 
         if observation_result.observation is None:
+            self.needs_recovery = True
+            
             print("ERROR: Observation result is None!")
             # Use the last valid observation if available
             observation = self.last_valid_observation
@@ -428,9 +424,6 @@ class ResetPolicyEnv(gym.Env):
                     initial_motor_positions=np.zeros(4, dtype=np.float32),
                     cube_x_norm=0.0,
                     cube_y_norm=0.0,
-                    horizontal_tension=0.0,
-                    vertical_tension=0.0,
-                    total_tension=0.0,
                 )
             
             # Get cube position
@@ -442,7 +435,7 @@ class ResetPolicyEnv(gym.Env):
             reward_info = self.reward_fn.compute(
                 visitation_count=visits,
                 motor_currents=observation.motor_currents,
-                hardware_error=False,
+                hardware_error=True,
             )
             reward = reward_info.total
             
@@ -466,6 +459,8 @@ class ResetPolicyEnv(gym.Env):
                 "safety_detail": safety_detail,
                 "safety_penalty": 0.0,
                 "modification_magnitude": modification_magnitude,
+                # NEW: Tension penalty from reward function
+                "tension_penalty": reward_info.tension_penalty,
             }
             
             return (
@@ -481,6 +476,11 @@ class ResetPolicyEnv(gym.Env):
         # -----------------------------------------------------
 
         observation = observation_result.observation
+        if self.renderer is not None and observation is not None:
+            cube_x_cm = (observation.cube_x - self.grid.x_min) * 100
+            cube_y_cm = (observation.cube_y - self.grid.y_min) * 100
+            self.renderer.update_step(self.step_count, cube_x_cm, cube_y_cm)
+        
 
         # Cache this as the newest known-good state
         self.last_valid_observation = observation
@@ -493,13 +493,28 @@ class ResetPolicyEnv(gym.Env):
         y = observation.cube_y
 
         # =====================================================
-        # 6. Update occupancy grid
+        # 6. Check out-of-bounds BEFORE updating grid
         # =====================================================
 
-        visits = self.grid.visit(x, y)
+        out_of_bounds = (
+            x < self.grid.x_min
+            or x > self.grid.x_max
+            or y < self.grid.y_min
+            or y > self.grid.y_max
+        )
 
         # =====================================================
-        # 7. Compute base reward
+        # 7. Update occupancy grid (only if in bounds)
+        # =====================================================
+
+        if out_of_bounds:
+            visits = 0
+            # Don't mark out-of-bounds positions as visited
+        else:
+            visits = self.grid.visit(x, y)
+
+        # =====================================================
+        # 8. Compute base reward
         # =====================================================
 
         reward_info = self.reward_fn.compute(
@@ -511,7 +526,7 @@ class ResetPolicyEnv(gym.Env):
         reward = reward_info.total
 
         # =====================================================
-        # 8. Apply Safety Penalty (Learning Signal!)
+        # 9. Apply Safety Penalty (Learning Signal!)
         # =====================================================
 
         safety_penalty = 0.0
@@ -533,24 +548,17 @@ class ResetPolicyEnv(gym.Env):
             )
 
         # =====================================================
-        # 9. Episode conditions
+        # 10. Episode conditions
         # =====================================================
 
         coverage = self.grid.coverage()
         coverage_done = coverage >= self.target_coverage
 
-        out_of_bounds = (
-            x < self.grid.x_min
-            or x > self.grid.x_max
-            or y < self.grid.y_min
-            or y > self.grid.y_max
-        )
-
         max_current = max(abs(float(i)) for i in observation.motor_currents)
         high_current = max_current > self.high_current_threshold
 
         # =====================================================
-        # 10. Termination
+        # 11. Termination
         # =====================================================
 
         terminated = False
@@ -563,11 +571,6 @@ class ResetPolicyEnv(gym.Env):
         elif out_of_bounds:
             terminated = True
             termination_reason = "out_of_bounds"
-            # Store start positions for recovery on next reset
-            positions = self.executor.read_positions()
-            if positions is not None:
-                self.episode_start_positions = {motor: pos for motor, pos in zip(self.executor.motor_ids, positions)}
-            self.needs_recovery = True
         elif coverage_done:
             terminated = True
             termination_reason = "coverage"
@@ -576,7 +579,7 @@ class ResetPolicyEnv(gym.Env):
             termination_reason = "max_steps"
 
         # =====================================================
-        # 11. Info
+        # 12. Info
         # =====================================================
 
         info = {
@@ -600,10 +603,11 @@ class ResetPolicyEnv(gym.Env):
             "safety_detail": safety_detail,
             "safety_penalty": safety_penalty,
             "modification_magnitude": modification_magnitude,
+            "tension_penalty": reward_info.tension_penalty,
         }
 
         # =====================================================
-        # 12. Return
+        # 13. Return
         # =====================================================
 
         return (
@@ -623,9 +627,19 @@ class ResetPolicyEnv(gym.Env):
             return None
 
         observation = self.obs_builder.get_observation()
+        
+        # Convert to cm AND offset to board origin
+        # The renderer expects coordinates starting from (0,0) in cm
+        cube_x_cm = (observation.cube_x - self.grid.x_min) * 100
+        cube_y_cm = (observation.cube_y - self.grid.y_min) * 100
+
+        print(f"[RENDER] cube_x={observation.cube_x:.3f}m → {cube_x_cm:.1f}cm")
+        print(f"[RENDER] cube_y={observation.cube_y:.3f}m → {cube_y_cm:.1f}cm")
+        print(f"[RENDER] board: {self.renderer.width:.1f}cm x {self.renderer.height:.1f}cm")
+
         return self.renderer.render(
-            cube_x=observation.cube_x,
-            cube_y=observation.cube_y,
+            cube_x=cube_x_cm,
+            cube_y=cube_y_cm,
             occupancy_grid=self.grid.as_numpy(),
             coverage=self.grid.coverage(),
             mode=self.render_mode,

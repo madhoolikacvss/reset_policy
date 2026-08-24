@@ -436,6 +436,17 @@ def train(
             )
             print(f"Saved checkpoint: {filename}")
 
+        if (episode + 1) % save_every == 0 or episode == 0:
+            # Save final state of the episode
+            if hasattr(env, 'renderer') and env.renderer is not None:
+                # Get final occupancy grid and coverage
+                occupancy = env.grid.as_numpy()
+                coverage = env.grid.coverage()
+                
+                # Save final render
+                env.renderer.save_final_render(occupancy, coverage)
+                print(f"Saved final render for episode {episode + 1}")
+
     # ========================================================
     # Final checkpoint
     # ========================================================
@@ -452,5 +463,6 @@ def train(
     )
     print(f"Saved final checkpoint: {final_filename}")
     print("Training complete.")
+
 
     return actor_critic

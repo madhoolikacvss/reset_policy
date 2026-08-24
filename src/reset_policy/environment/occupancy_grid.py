@@ -54,29 +54,22 @@ class OccupancyGrid:
         """
         Convert world coordinates to grid cell indices.
         
+        If coordinates are outside board boundaries, clamps to nearest edge.
+        
         Args:
             x: x coordinate in meters (AprilTag world frame)
             y: y coordinate in meters (AprilTag world frame)
             
         Returns:
             GridCell: Row and column indices
-            
-        Raises:
-            ValueError: If coordinates are outside board boundaries
         """
-        # Check if coordinates are within board bounds
-        if not (self.x_min <= x <= self.x_max):
-            raise ValueError(
-                f"x={x:.3f} outside board bounds [{self.x_min:.3f}, {self.x_max:.3f}]"
-            )
-        if not (self.y_min <= y <= self.y_max):
-            raise ValueError(
-                f"y={y:.3f} outside board bounds [{self.y_min:.3f}, {self.y_max:.3f}]"
-            )
+        # Clamp coordinates to board bounds (instead of raising error)
+        x_clamped = max(self.x_min, min(self.x_max, x))
+        y_clamped = max(self.y_min, min(self.y_max, y))
 
         # Normalize coordinates relative to board origin (x_min, y_min)
-        x_norm = x - self.x_min
-        y_norm = y - self.y_min
+        x_norm = x_clamped - self.x_min
+        y_norm = y_clamped - self.y_min
 
         # Calculate cell indices
         col = min(int(x_norm / self.cell_size), self.cols - 1)
@@ -87,6 +80,8 @@ class OccupancyGrid:
     def visit(self, x: float, y: float) -> int:
         """
         Record a visit to a cell and increment its count.
+        
+        If coordinates are outside board bounds, clamps to nearest edge cell.
         
         Args:
             x: x coordinate in meters
@@ -103,6 +98,8 @@ class OccupancyGrid:
         """
         Get the visitation count for a cell.
         
+        If coordinates are outside board bounds, clamps to nearest edge cell.
+        
         Args:
             x: x coordinate in meters
             y: y coordinate in meters
@@ -116,6 +113,8 @@ class OccupancyGrid:
     def is_new_cell(self, x: float, y: float) -> bool:
         """
         Check if a cell has never been visited.
+        
+        If coordinates are outside board bounds, clamps to nearest edge cell.
         
         Args:
             x: x coordinate in meters
