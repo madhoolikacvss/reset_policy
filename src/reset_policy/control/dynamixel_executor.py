@@ -800,6 +800,46 @@ class DynamixelExecutor:
         
         print("  Gradual move complete")
 
+
+    # In dynamixel_executor.py
+
+    def recovery(self):
+        """
+        Simple recovery: attempt to re-establish communication with all motors.
+        """
+        print("\n================ RECOVERY ================")
+        
+        # 1. Wait for motors to settle
+        print("Waiting for motors to settle...")
+        time.sleep(3.0)
+        
+        # 2. Try to read positions from all motors
+        print("Checking motor communication...")
+        all_ok = True
+        for motor in self.motor_ids:
+            pos = self.read_position(motor)
+            if pos is None:
+                print(f"  Motor {motor}: No response")
+                all_ok = False
+                # Try waiting a little more
+                time.sleep(2.0)
+                pos = self.read_position(motor)
+                if pos is not None:
+                    print(f"  Motor {motor}: Recovered!")
+                else:
+                    print(f"  Motor {motor}: Still unresponsive")
+                    return False
+            else:
+                print(f"  Motor {motor}: OK (pos={pos})")
+        
+        # 3. Clear hardware error flags
+        self.clear_hardware_errors()
+        
+        print("Recovery complete.")
+        print("==========================================\n")
+        
+        return all_ok
+
     # ========================================================
     # Shutdown
     # ========================================================
