@@ -56,7 +56,10 @@ class AprilTagTracker:
         rot = Rotation.from_matrix(T[:3, :3])
 
         roll, pitch, yaw = rot.as_euler("xyz", degrees=True)
-
+        print("------ in april tag -------")
+        print("x: ", x)
+        print("y: ", y)
+        
         return x, y, z, roll, pitch, yaw
 
     def process(self, rgb: np.ndarray):

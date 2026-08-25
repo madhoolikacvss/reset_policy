@@ -31,7 +31,7 @@ class BoardRenderer:
         board_height=20,
         cell_size=1,
         save_dir=None,
-        save_every_n=5,           # Save every N episodes
+        save_every_n=3,           # Save every N episodes
         max_saved_plots=200,
         max_trajectory_points=500, # Max points to keep in trajectory
     ):
@@ -56,29 +56,13 @@ class BoardRenderer:
         self.trajectory = []  # List of (x, y) positions in cm
         self.visit_counts = {}  # Dict mapping (row, col) -> count
         
-        # For interactive mode (if available)
+        # NO INTERACTIVE MODE - just save to disk
         self.fig = None
         self.ax = None
         self.interactive = False
-        
-        # Try to create interactive figure if display is available
-        try:
-            if os.environ.get('DISPLAY') or os.name == 'nt':
-                matplotlib.use('TkAgg')
-                import matplotlib.pyplot as plt
-                self.fig, self.ax = plt.subplots(figsize=(10, 8))
-                plt.ion()
-                self.fig.show()
-                self.fig.canvas.draw()
-                self.interactive = True
-                print("Renderer: Interactive mode enabled")
-            else:
-                print("Renderer: Using headless mode (saving to disk)")
-        except Exception as e:
-            print(f"Renderer: Using headless mode (saving to disk) - {e}")
-        
-        # For tracking last save
         self.last_saved_episode = -1
+        
+        print("Renderer: Headless mode (saving to disk)")
 
     def update_episode(self, episode):
         """Start a new episode - reset trajectory and counts."""
@@ -311,80 +295,7 @@ class BoardRenderer:
             # Clean up old plots
             self._cleanup_old_plots()
 
-        # ============================================================
-        # 7. INTERACTIVE DISPLAY (if available)
-        # ============================================================
-        
-        if self.interactive and self.fig is not None and mode == "human":
-            try:
-                # Transfer plot to interactive figure
-                self.ax.clear()
-                # Copy the plot elements (simplified for performance)
-                self.ax.set_xlim(0, self.width)
-                self.ax.set_ylim(0, self.height)
-                self.ax.set_aspect("equal")
-                self.ax.set_xlabel("X (cm)")
-                self.ax.set_ylabel("Y (cm)")
-                self.ax.set_title(f"Episode {self.episode_count}, Step {self.step_count}")
-                
-                # Add heatmap if available
-                if self.visit_counts:
-                    grid_cols = int(self.width / self.cell_size)
-                    grid_rows = int(self.height / self.cell_size)
-                    heatmap = np.zeros((grid_rows, grid_cols))
-                    max_visits = max(self.visit_counts.values()) if self.visit_counts else 1
-                    for (col, row), count in self.visit_counts.items():
-                        if 0 <= row < grid_rows and 0 <= col < grid_cols:
-                            heatmap[row, col] = count / max_visits
-                    self.ax.imshow(
-                        heatmap,
-                        origin='lower',
-                        extent=[0, self.width, 0, self.height],
-                        cmap='hot',
-                        alpha=0.6,
-                        aspect='auto',
-                        vmin=0,
-                        vmax=1,
-                    )
-                
-                # Add trajectory
-                if len(self.trajectory) > 1:
-                    traj_x = [p[0] for p in self.trajectory]
-                    traj_y = [p[1] for p in self.trajectory]
-                    self.ax.plot(traj_x, traj_y, color='green', linewidth=2, alpha=0.7)
-                    self.ax.scatter(traj_x[0], traj_y[0], s=150, marker='o', color='lime', edgecolor='darkgreen', linewidth=2)
-                
-                # Add cube
-                self.ax.scatter(
-                    cube_x_clamped,
-                    cube_y_clamped,
-                    s=300,
-                    marker="s",
-                    zorder=10,
-                    color='red' if out_of_bounds else 'blue',
-                    edgecolor='black',
-                    linewidth=2,
-                )
-                
-                # Add info
-                if len(info_lines) > 0:
-                    self.ax.text(
-                        0.02,
-                        0.98,
-                        "\n".join(info_lines),
-                        transform=self.ax.transAxes,
-                        verticalalignment="top",
-                        bbox=dict(facecolor="white", alpha=0.9, edgecolor='gray'),
-                        fontsize=10,
-                    )
-                
-                self.fig.canvas.draw_idle()
-                self.fig.canvas.flush_events()
-                plt.pause(0.001)
-            except Exception as e:
-                print(f"Renderer: Interactive mode failed - {e}")
-                self.interactive = False
-
+        # NO INTERACTIVE DISPLAY - just close the figure
         plt.close(fig)
         
         if mode == "rgb_array" and saved_path:

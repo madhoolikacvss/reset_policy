@@ -37,7 +37,7 @@ class ResetPolicyEnv(gym.Env):
         reward_function: RewardFunction,
 
         max_motor_delta=400,
-        action_duration: float = 0.4,
+        action_duration: float = 0.8,
 
         render_mode=None,
 
@@ -90,12 +90,9 @@ class ResetPolicyEnv(gym.Env):
 
         if self.render_mode in ("human", "rgb_array"):
             self.renderer = BoardRenderer(
-                board_width=(self.grid.x_max - self.grid.x_min) * 100,  # convert to cm
-                board_height=(self.grid.y_max - self.grid.y_min) * 100,  # convert to cm
-                cell_size=self.grid.cell_size * 100,  # convert to cm,
-                # save_every = 5, 
-                # interactive=False, 
-
+                board_width=(self.grid.x_max - self.grid.x_min) * 100,
+                board_height=(self.grid.y_max - self.grid.y_min) * 100,
+                cell_size=self.grid.cell_size * 100,
             )
         else:
             self.renderer = None
@@ -120,35 +117,48 @@ class ResetPolicyEnv(gym.Env):
         
         # Track if we need recovery on next reset
         self.needs_recovery = False
+        self.needs_reposition = False
 
     # =========================================================
     # RESET
     # =========================================================
     def reset(self, *, seed=None, options=None):
-
         super().reset(seed=seed)
         self.episode_count += 1
         time.sleep(1)
+        
         print("\n================ ENV RESET ================ ")
         self.reward_fn.prev_currents = None
 
-        # 1. Recover physical hardware ONLY if needed
+        # 1. Recover from hardware error if needed
         if self.needs_recovery:
             print("Recovering from hardware error...")
             self.executor.recovery()
             self.needs_recovery = False
         else:
             print("No hardware error - skipping recovery")
+
+        # 2. Reposition cube to center if needed
+        if self.needs_reposition:
+            print("Repositioning cube to center...")
+            self.reposition_cube_to_center(attempt=0)
+            self.needs_reposition = False
+            
+            # ====================================================
+            # CRITICAL FIX: Sync targets after repositioning
+            # ====================================================
+            print("Syncing executor targets with actual motor positions...")
+            self._sync_targets_with_actual_positions()
         
-        # 2. Reset episode bookkeeping
+        # 3. Reset episode bookkeeping
         self.grid.reset()
         self.step_count = 0
         self.safety_interventions_episode = 0
         
-        # 3. Establish initial motor positions AFTER recovery
+        # 4. Establish initial motor positions AFTER reposition and sync
         self.obs_builder.reset()
 
-        # 4. Get first observation
+        # 5. Get first observation
         result = self.obs_builder.get_observation_result()
 
         if result.hardware_error:
@@ -165,7 +175,7 @@ class ResetPolicyEnv(gym.Env):
 
         observation = result.observation
         
-        # 5. Mark starting cube position
+        # 6. Mark starting cube position
         self.grid.visit(
             observation.cube_x,
             observation.cube_y,
@@ -173,12 +183,12 @@ class ResetPolicyEnv(gym.Env):
         self.last_valid_observation = observation
 
         return observation.as_numpy(), {}
-
     # STEP
     def step(self, action):
         # Clamp action to valid range
         action = np.clip(action, -1.0, 1.0)
         self.step_count += 1
+        
         # =====================================================
         # 1. APPLY SAFETY FILTER (BEFORE EXECUTION)
         # =====================================================
@@ -193,7 +203,8 @@ class ResetPolicyEnv(gym.Env):
         # Get current motor state for safety filter
         positions = self.executor.read_positions()
         currents = self.executor.read_currents()
-        voltages = self.executor.read_voltages()  # <-- ADDED: Read voltages
+        voltages = self.executor.read_voltages()
+        temperatures = self.executor.read_temperatures()    
         initial_positions = self.obs_builder.initial_motor_positions
         
         if self.safety_filter is not None and positions is not None and currents is not None:
@@ -203,7 +214,8 @@ class ResetPolicyEnv(gym.Env):
                     currents=np.array(currents),
                     positions=np.array(positions),
                     initial_positions=initial_positions,
-                    voltages=np.array(voltages) if voltages is not None else None,  # <-- ADDED
+                    voltages=np.array(voltages) if voltages is not None else None,
+                    temperatures=np.array(temperatures) if temperatures is not None else None,  # <-- ADD THIS
                     action_count=self.step_count,
                 )
                 
@@ -295,7 +307,6 @@ class ResetPolicyEnv(gym.Env):
                 "safety_detail": safety_detail,
                 "safety_penalty": safety_penalty,
                 "modification_magnitude": modification_magnitude,
-                # NEW: Tension penalty from reward function
                 "tension_penalty": reward_info.tension_penalty,
             }
 
@@ -389,7 +400,6 @@ class ResetPolicyEnv(gym.Env):
                 "safety_detail": safety_detail,
                 "safety_penalty": safety_penalty,
                 "modification_magnitude": modification_magnitude,
-                # NEW: Tension penalty from reward function
                 "tension_penalty": reward_info.tension_penalty,
             }
 
@@ -459,7 +469,6 @@ class ResetPolicyEnv(gym.Env):
                 "safety_detail": safety_detail,
                 "safety_penalty": 0.0,
                 "modification_magnitude": modification_magnitude,
-                # NEW: Tension penalty from reward function
                 "tension_penalty": reward_info.tension_penalty,
             }
             
@@ -476,11 +485,12 @@ class ResetPolicyEnv(gym.Env):
         # -----------------------------------------------------
 
         observation = observation_result.observation
+        
+        # Update renderer with trajectory
         if self.renderer is not None and observation is not None:
             cube_x_cm = (observation.cube_x - self.grid.x_min) * 100
             cube_y_cm = (observation.cube_y - self.grid.y_min) * 100
             self.renderer.update_step(self.step_count, cube_x_cm, cube_y_cm)
-        
 
         # Cache this as the newest known-good state
         self.last_valid_observation = observation
@@ -493,7 +503,7 @@ class ResetPolicyEnv(gym.Env):
         y = observation.cube_y
 
         # =====================================================
-        # 6. Check out-of-bounds BEFORE updating grid
+        # 6. Check out-of-bounds
         # =====================================================
 
         out_of_bounds = (
@@ -506,10 +516,12 @@ class ResetPolicyEnv(gym.Env):
         # =====================================================
         # 7. Update occupancy grid (only if in bounds)
         # =====================================================
-
+        out_of_bound_penalty = 0
         if out_of_bounds:
             visits = 0
-            # Don't mark out-of-bounds positions as visited
+            print(f"Cube out of bounds at ({x:.3f}, {y:.3f}) - will reposition on reset")
+            self.needs_reposition = True  # Flag for repositioning on reset
+            out_of_bound_penalty = -20
         else:
             visits = self.grid.visit(x, y)
 
@@ -523,7 +535,7 @@ class ResetPolicyEnv(gym.Env):
             hardware_error=False,
         )
 
-        reward = reward_info.total
+        reward = reward_info.total + out_of_bound_penalty
 
         # =====================================================
         # 9. Apply Safety Penalty (Learning Signal!)
@@ -597,6 +609,7 @@ class ResetPolicyEnv(gym.Env):
             "execution_success": True,
             "cube_position": (x, y),
             "termination_reason": termination_reason,
+            "out_of_bounds_penalty": out_of_bound_penalty,
             # Safety info
             "action_modified": action_modified,
             "safety_reason": safety_reason,
@@ -619,6 +632,147 @@ class ResetPolicyEnv(gym.Env):
         )
 
     # =========================================================
+    # REPOSITION CUBE TO CENTER
+    # =========================================================
+    def reposition_cube_to_center(self, attempt=0):
+        """
+        Simple deterministic repositioning.
+        Pull the appropriate motor to bring cube back to center.
+        """
+        print("\n========== REPOSITIONING CUBE ==========")
+
+        max_attempt = 3
+        
+        # 1. Get current cube position
+        result = self.obs_builder.get_observation_result()
+        if result.observation is None:
+            print("ERROR: Cannot get cube position")
+            return False
+        
+        x = result.observation.cube_x
+        y = result.observation.cube_y
+        
+        print(f"Current position: ({x:.3f}, {y:.3f})")
+        print(f"Board bounds: x=[{self.grid.x_min:.3f}, {self.grid.x_max:.3f}], y=[{self.grid.y_min:.3f}, {self.grid.y_max:.3f}]")
+        
+        
+        # Determine which motor to pull based on which direction we need to go
+        # Priority: whichever direction is further from center
+        motor_to_pull = None
+        direction = 0  # +1 for pull, -1 for release
+        steps = 30
+        step_delta = 50
+        
+        # Check which axis is further from center
+        if x < self.grid.x_min:
+        # X-axis is further off
+            motor_to_pull = 18
+            direction = 1
+            print(f"x={x:.3f} moving (Motor 18)")
+        elif x > self.grid.x_max:
+            # X-axis is further off
+            motor_to_pull = 19
+            direction = 1
+            print(f"x={x:.3f} moving (Motor 19)")
+        elif y < self.grid.y_min:
+            motor_to_pull = 17
+            direction = 1
+            print(f"y={y:.3f} moving (Motor 17")
+        elif y > self.grid.y_max:
+            motor_to_pull = 16
+            direction = 1
+            print(f"y={y:.3f} moving (Motor 16")
+        else: 
+            # In bounds but off-center - pull toward center
+            center_x = (self.grid.x_min + self.grid.x_max) / 2
+            center_y = (self.grid.y_min + self.grid.y_max) / 2
+            dx = center_x - x
+            dy = center_y - y
+            
+            if abs(dx) > abs(dy):
+                if dx > 0:
+                    motor_to_pull = 18
+                    direction = 1
+                    print(f"Moving  toward center (Motor 18)")
+                else:
+                    motor_to_pull = 19
+                    direction = 1
+                    print(f" (Motor 19)")
+            else:
+                if dy > 0:
+                    motor_to_pull = 17
+                    direction = 1
+                    print(f"Motor 17)")
+                else:
+                    motor_to_pull = 16
+                    direction = 1
+                    print(f" (Motor 16)")
+
+
+        print(f"Releasing other motors (especially the opposite of Motor {motor_to_pull})...")
+        released_motors = []
+        for motor in self.executor.motor_ids:
+            if motor != motor_to_pull:
+                try:
+                    self.executor.write1(motor, 64, 0)  # TORQUE_DISABLE
+                    released_motors.append(motor)
+                    print(f"  Released Motor {motor}")
+                except Exception as e:
+                    print(f"  Failed to release motor {motor}: {e}")
+        time.sleep(0.05)
+        
+        print(f"Motors released: {released_motors}")
+        print(f"Active motor: {motor_to_pull} (pulling {direction})")
+                    
+        # Move in small steps
+        print(f"Moving Motor {motor_to_pull}: {steps} steps of {step_delta * direction} ticks")
+        
+        for step in range(steps):
+            print(step)
+            self.executor.move_motor_by_delta(motor_to_pull, step_delta * direction)
+            time.sleep(0.05)
+
+        print(f"Re-enabling all motors...")
+        for motor in self.executor.motor_ids:
+            try:
+                self.executor.write1(motor, 64, 1)
+            except Exception as e:
+                print(f"  Failed to enable motor {motor}: {e}")
+        time.sleep(0.5)
+        print("Syncing targets after reposition...")
+        self._sync_targets_with_actual_positions()
+    
+
+        result = self.obs_builder.get_observation_result()
+        if result.observation is not None:
+            new_x = result.observation.cube_x
+            new_y = result.observation.cube_y
+            print(f"New position: ({new_x:.3f}, {new_y:.3f})")
+            if x < self.grid.x_min or x > self.grid.x_max or y < self.grid.y_min or y > self.grid.y_max:
+                print("still needs repositioning, calling again")
+                self.reposition_cube_to_center(attempt + 1)
+        
+        print("========== REPOSITION COMPLETE ==========")
+        return True
+
+
+    # In environment.py
+
+    def _sync_targets_with_actual_positions(self):
+        """
+        Sync the executor's target positions with actual motor positions.
+        This prevents the RL policy from using old/stale target values.
+        """
+        print("  Syncing targets with actual positions...")
+        positions = self.executor.read_positions()
+        if positions is not None:
+            for motor_id, pos in zip(self.executor.motor_ids, positions):
+                old_target = self.executor.targets.get(motor_id, pos)
+                self.executor.targets[motor_id] = pos
+                print(f"    Motor {motor_id}: target {old_target} → {pos}")
+        else:
+            print("  WARNING: Could not read positions for sync!")
+    # =========================================================
     # RENDER
     # =========================================================
 
@@ -629,7 +783,6 @@ class ResetPolicyEnv(gym.Env):
         observation = self.obs_builder.get_observation()
         
         # Convert to cm AND offset to board origin
-        # The renderer expects coordinates starting from (0,0) in cm
         cube_x_cm = (observation.cube_x - self.grid.x_min) * 100
         cube_y_cm = (observation.cube_y - self.grid.y_min) * 100
 

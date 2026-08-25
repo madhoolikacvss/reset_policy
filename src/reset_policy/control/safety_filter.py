@@ -9,6 +9,7 @@ The safety filter intercepts PPO actions and modifies them to prevent:
 3. Over-current conditions
 4. Voltage drops causing communication loss
 5. Overloading already-stressed motors
+6. Tension going too low (slack strings)
 
 The filter logs all interventions so the policy can learn to avoid them.
 """
@@ -27,13 +28,16 @@ class SafetyReason(Enum):
     HIGH_HORIZONTAL_CURRENT = "high_horizontal_current"
     HIGH_VERTICAL_CURRENT = "high_vertical_current"
     SINGLE_MOTOR_OVER_CURRENT = "single_motor_over_current"
-    POSITION_LIMIT_PULL = "position_limit_pull"
+    POSITION_LIMIT_PULL = "position_limit_pull" 
     POSITION_LIMIT_RELEASE = "position_limit_release"
     OPPOSING_MOTORS = "opposing_motors"
-    TENSION_SAFETY = "tension_safety"
     CURRENT_AWARE_SCALING = "current_aware_scaling"
-    VOLTAGE_LOW = "voltage_low"              # <-- ADD THIS
-    VOLTAGE_CRITICAL = "voltage_critical"    # <-- ADD THIS
+    VOLTAGE_LOW = "voltage_low"
+    VOLTAGE_CRITICAL = "voltage_critical"
+    TENSION_TOO_LOW = "tension_too_low"
+    TEMPERATURE_HIGH = "temperature_high"     
+    TEMPERATURE_CRITICAL = "temperature_critical"  
+    MOTOR_STUCK = "motor_stuck"                
 
 
 @dataclass
@@ -63,6 +67,7 @@ class SafetyFilter:
         - Current-aware proactive scaling (prevents overloading)
         - Voltage-aware proactive scaling (prevents communication loss)
         - Tension safety (prevents motors fighting)
+        - Tension constraint (prevents slack strings)
         - Pair-wise current limiting (reactive)
         - Single motor over-current protection (reactive)
         - Position limit protection
@@ -75,36 +80,44 @@ class SafetyFilter:
         pair_vertical: List[int] = None,
         
         # Current thresholds (mA)
-        max_pair_current: float = 800.0,
-        max_single_current: float = 600.0,
+        max_pair_current: float = 1000.0,
+        max_single_current: float = 800.0,
         
         # Position limits (encoder ticks relative to initial)
         max_position: float = 8000.0,
         
         # Voltage thresholds (V)
-        min_voltage: float = 4.0,              # <-- ADD
-        critical_voltage: float = 3.5,         # <-- ADD
+        min_voltage: float = 4.0,
+        critical_voltage: float = 3.5,
         
         # Action scaling factors
         current_scale_factor: float = 0.25,
         position_scale_factor: float = 0.5,
-        voltage_scale_factor: float = 0.3,     # <-- ADD
+        voltage_scale_factor: float = 0.3,
         
-        # Tension safety
-        tension_threshold: float = 0.7,
+        # Temperature thresholds (°C)
+        temp_threshold: float = 45.0,       
+        temp_critical: float = 55.0, 
+        temp_scale_factor: float = 0.3,      # <-- MOVED HERE
         
         # Current-aware scaling thresholds (mA)
-        heavy_load_threshold: float = 400.0,     # <-- ADD
-        critical_load_threshold: float = 700.0,  # <-- ADD
-        heavy_load_scale: float = 0.3,           # <-- ADD
-        moderate_load_scale: float = 0.6,        # <-- ADD
+        heavy_load_threshold: float = 400.0,
+        critical_load_threshold: float = 700.0,
+        heavy_load_scale: float = 0.3,
+        moderate_load_scale: float = 0.6,
         
+        # Tension constraint (mA)
+        min_tension_threshold: float = 30.0,
+
         # Enable/disable features
         enable_current_safety: bool = True,
         enable_position_safety: bool = True,
         enable_tension_safety: bool = True,
-        enable_voltage_safety: bool = True,          # <-- ADD
-        enable_current_aware_safety: bool = True,    # <-- ADD
+        enable_voltage_safety: bool = True,
+        enable_current_aware_safety: bool = True,
+        enable_tension_constraint: bool = True,  
+        enable_temperature_safety: bool = True,   # <-- ADD THIS
+        enable_stuck_motor_safety: bool = True,   # <-- ADD THIS
         
         # Logging
         log_interventions: bool = True,
@@ -139,14 +152,14 @@ class SafetyFilter:
         self.position_scale_factor = position_scale_factor
         self.voltage_scale_factor = voltage_scale_factor
         
-        # Tension safety
-        self.tension_threshold = tension_threshold
-        
         # Current-aware scaling
         self.heavy_load_threshold = heavy_load_threshold
         self.critical_load_threshold = critical_load_threshold
         self.heavy_load_scale = heavy_load_scale
         self.moderate_load_scale = moderate_load_scale
+        
+        # Tension constraint
+        self.min_tension_threshold = min_tension_threshold
         
         # Feature flags
         self.enable_current_safety = enable_current_safety
@@ -154,8 +167,18 @@ class SafetyFilter:
         self.enable_tension_safety = enable_tension_safety
         self.enable_voltage_safety = enable_voltage_safety
         self.enable_current_aware_safety = enable_current_aware_safety
+        self.enable_tension_constraint = enable_tension_constraint  
         self.log_interventions = log_interventions
+
+           # Temperature thresholds
+        self.temp_threshold = temp_threshold
+        self.temp_critical = temp_critical
+        self.temp_scale_factor = temp_scale_factor
         
+        # Feature flags
+        self.enable_temperature_safety = enable_temperature_safety
+        self.enable_stuck_motor_safety = enable_stuck_motor_safety
+            
         # Statistics
         self.intervention_count = 0
         self.intervention_reasons = {reason: 0 for reason in SafetyReason}
@@ -171,6 +194,7 @@ class SafetyFilter:
         print(f"  Critical voltage: {critical_voltage} V")
         print(f"  Heavy load threshold: {heavy_load_threshold} mA")
         print(f"  Critical load threshold: {critical_load_threshold} mA")
+        print(f"  Min tension threshold: {min_tension_threshold} mA")
         
     def filter(
         self,
@@ -179,6 +203,7 @@ class SafetyFilter:
         positions: np.ndarray,
         initial_positions: np.ndarray,
         voltages: np.ndarray = None,
+        temperatures: np.ndarray = None,  # <-- ADD THIS PARAMETER
         action_count: int = 0,
     ) -> SafetyResult:
         """
@@ -205,8 +230,7 @@ class SafetyFilter:
         )
         
         # ============================================================
-        # 1. CURRENT-AWARE SAFETY - PROACTIVE (run FIRST)
-        #    Proactively scale actions for already-loaded motors
+        # 1. CURRENT-AWARE SAFETY - PROACTIVE
         # ============================================================
         
         if self.enable_current_aware_safety and currents is not None:
@@ -221,8 +245,22 @@ class SafetyFilter:
                 self._log_intervention(reason, detail, raw_action, action)
         
         # ============================================================
-        # 2. VOLTAGE SAFETY - PROACTIVE
-        #    Scale down actions when voltage is low
+        # 2. TEMPERATURE SAFETY - PROACTIVE (NEW)
+        # ============================================================
+        
+        if self.enable_temperature_safety and temperatures is not None:
+            action, modified, reason, detail, affected = self._apply_temperature_safety(
+                action, temperatures
+            )
+            if modified:
+                result.modified = True
+                result.reason = reason
+                result.detail = detail
+                result.affected_motors = affected
+                self._log_intervention(reason, detail, raw_action, action)
+        
+        # ============================================================
+        # 3. VOLTAGE SAFETY - PROACTIVE
         # ============================================================
         
         if self.enable_voltage_safety and voltages is not None:
@@ -237,13 +275,12 @@ class SafetyFilter:
                 self._log_intervention(reason, detail, raw_action, action)
         
         # ============================================================
-        # 3. TENSION SAFETY - PROACTIVE
-        #    Prevent opposing motors from fighting
+        # 4. TENSION SAFETY - PROACTIVE (opposing motors)
         # ============================================================
         
         if self.enable_tension_safety and currents is not None:
             action, modified, reason, detail, affected = self._apply_tension_safety(
-                action, currents, positions
+                action, currents
             )
             if modified:
                 result.modified = True
@@ -253,8 +290,22 @@ class SafetyFilter:
                 self._log_intervention(reason, detail, raw_action, action)
         
         # ============================================================
-        # 4. CURRENT SAFETY - REACTIVE
-        #    Enforce hard limits on pair and single motor current
+        # 5. TENSION CONSTRAINT - PROACTIVE (slack strings)
+        # ============================================================
+        
+        if self.enable_tension_constraint and currents is not None:
+            action, modified, reason, detail, affected = self._apply_tension_constraint(
+                action, currents
+            )
+            if modified:
+                result.modified = True
+                result.reason = reason
+                result.detail = detail
+                result.affected_motors = affected
+                self._log_intervention(reason, detail, raw_action, action)
+                
+        # ============================================================
+        # 6. CURRENT SAFETY - REACTIVE
         # ============================================================
         
         if self.enable_current_safety and currents is not None:
@@ -269,8 +320,7 @@ class SafetyFilter:
                 self._log_intervention(reason, detail, raw_action, action)
         
         # ============================================================
-        # 5. POSITION SAFETY - REACTIVE
-        #    Prevent exceeding position limits
+        # 7. POSITION SAFETY - REACTIVE
         # ============================================================
         
         if self.enable_position_safety and positions is not None and initial_positions is not None:
@@ -311,12 +361,6 @@ class SafetyFilter:
         
         Proactively scales down actions for motors that are already
         heavily loaded, preventing them from being pushed into overload.
-        
-        Scaling strategy:
-            - current < 200mA: full action (scale 1.0)
-            - 200-400mA: slight scaling (scale 0.7-1.0)
-            - 400-700mA: moderate scaling (scale 0.3-0.7)
-            - > 700mA: heavy scaling (scale 0.15-0.3)
         """
         
         modified = False
@@ -337,17 +381,14 @@ class SafetyFilter:
             # Determine scaling factor based on current load
             if current < 200:
                 scale = 1.0
-                
             elif current < self.heavy_load_threshold:  # 200-400mA
                 load_range = self.heavy_load_threshold - 200
                 scale = 1.0 - (current - 200) / load_range * (1.0 - self.moderate_load_scale)
                 scale = max(self.moderate_load_scale, min(1.0, scale))
-                
             elif current < self.critical_load_threshold:  # 400-700mA
                 load_range = self.critical_load_threshold - self.heavy_load_threshold
                 scale = self.moderate_load_scale - (current - self.heavy_load_threshold) / load_range * (self.moderate_load_scale - self.heavy_load_scale)
                 scale = max(self.heavy_load_scale, min(self.moderate_load_scale, scale))
-                
             else:  # > 700mA
                 scale = self.heavy_load_scale
                 if current > 900:
@@ -421,14 +462,13 @@ class SafetyFilter:
         return action, modified, reason, detail, affected
     
     # ============================================================
-    # TENSION SAFETY - PROACTIVE
+    # TENSION SAFETY - PROACTIVE (opposing motors)
     # ============================================================
     
     def _apply_tension_safety(
         self,
         action: np.ndarray,
         currents: np.ndarray,
-        positions: np.ndarray,
     ) -> Tuple[np.ndarray, bool, Optional[SafetyReason], str, List[int]]:
         """
         Prevent motors from fighting each other.
@@ -448,8 +488,8 @@ class SafetyFilter:
         # Check horizontal pair (16, 17)
         a16 = action[self.h_idx[0]]
         a17 = action[self.h_idx[1]]
-        c16 = abs(currents[self.h_idx[0]]) if currents is not None else 0
-        c17 = abs(currents[self.h_idx[1]]) if currents is not None else 0
+        c16 = abs(currents[self.h_idx[0]])
+        c17 = abs(currents[self.h_idx[1]])
         
         if a16 > 0.3 and a17 > 0.3 and c16 > 100 and c17 > 100:
             if abs(a16) > abs(a17):
@@ -465,8 +505,8 @@ class SafetyFilter:
         # Check vertical pair (18, 19)
         a18 = action[self.v_idx[0]]
         a19 = action[self.v_idx[1]]
-        c18 = abs(currents[self.v_idx[0]]) if currents is not None else 0
-        c19 = abs(currents[self.v_idx[1]]) if currents is not None else 0
+        c18 = abs(currents[self.v_idx[0]])
+        c19 = abs(currents[self.v_idx[1]])
         
         if a18 > 0.3 and a19 > 0.3 and c18 > 100 and c19 > 100:
             if abs(a18) > abs(a19):
@@ -478,6 +518,102 @@ class SafetyFilter:
             modified = True
             reason = SafetyReason.OPPOSING_MOTORS
             detail = f"Motors {self.pair_vertical[0]} and {self.pair_vertical[1]} both pulling with tension"
+        
+        return action, modified, reason, detail, affected
+
+
+    # In safety_filter.py - add temperature safety
+
+    def _apply_temperature_safety(
+        self,
+        action: np.ndarray,
+        temperatures: np.ndarray,
+    ) -> Tuple[np.ndarray, bool, Optional[SafetyReason], str, List[int]]:
+        """
+        Scale down actions if motors are overheating.
+        """
+        modified = False
+        reason = None
+        detail = ""
+        affected = []
+        
+        if temperatures is None:
+            return action, modified, reason, detail, affected
+        
+        for i, motor_id in enumerate(self.motor_ids):
+            temp = temperatures[i]
+            if temp is None:
+                continue
+            
+            # If temperature > 45°C, start scaling
+            if temp > 45:
+                scale = max(0.2, 1.0 - (temp - 45) / 20)
+                action[i] *= scale
+                modified = True
+                reason = SafetyReason.TEMPERATURE_HIGH
+                detail = f"Motor {motor_id}: {temp:.0f}°C -> scale={scale:.2f}"
+                affected.append(motor_id)
+                print(f"  [TEMPERATURE] Motor {motor_id}: {temp:.0f}°C, scaling to {scale:.2f}")
+        
+        return action, modified, reason, detail, affected
+    
+    # ============================================================
+    # TENSION CONSTRAINT - PROACTIVE (slack strings)
+    # ============================================================
+    
+    def _apply_tension_constraint(
+        self,
+        action: np.ndarray,
+        currents: np.ndarray,
+    ) -> Tuple[np.ndarray, bool, Optional[SafetyReason], str, List[int]]:
+        """
+        Ensure minimum tension is maintained.
+        
+        If any pair has both motors releasing (negative actions) and tension
+        is too low, prevent further release to avoid slack strings.
+        """
+        
+        modified = False
+        reason = None
+        detail = ""
+        affected = []
+        
+        if currents is None:
+            return action, modified, reason, detail, affected
+        
+        # Calculate current tension for each pair
+        horizontal_tension = abs(currents[0]) + abs(currents[1])
+        vertical_tension = abs(currents[2]) + abs(currents[3])
+        
+        # ============================================================
+        # Horizontal pair (16, 17)
+        # ============================================================
+        
+        if horizontal_tension < self.min_tension_threshold:
+            # Both releasing - scale down the release
+            if action[0] < 0 and action[1] < 0:
+                action[0] *= 0.2
+                action[1] *= 0.2
+                modified = True
+                reason = SafetyReason.TENSION_TOO_LOW
+                detail = f"Horizontal tension {horizontal_tension:.0f}mA < {self.min_tension_threshold}mA"
+                affected.extend(self.pair_horizontal)
+                print(f"  [TENSION] Horizontal tension too low ({horizontal_tension:.0f}mA), scaling release")
+            # One releasing, one pulling - allow (maintains tension)
+        
+        # ============================================================
+        # Vertical pair (18, 19)
+        # ============================================================
+        
+        if vertical_tension < self.min_tension_threshold:
+            if action[2] < 0 and action[3] < 0:
+                action[2] *= 0.2
+                action[3] *= 0.2
+                modified = True
+                reason = SafetyReason.TENSION_TOO_LOW
+                detail = f"Vertical tension {vertical_tension:.0f}mA < {self.min_tension_threshold}mA"
+                affected.extend(self.pair_vertical)
+                print(f"  [TENSION] Vertical tension too low ({vertical_tension:.0f}mA), scaling release")
         
         return action, modified, reason, detail, affected
     
@@ -530,7 +666,7 @@ class SafetyFilter:
             detail = f"Vertical current {v_current:.1f}mA > {self.max_pair_current}mA"
             affected.extend(self.pair_vertical)
         
-        # Check single motor over-current
+        # Check single motor over-current (only if pair check didn't trigger)
         if not modified:
             for i, motor_id in enumerate(self.motor_ids):
                 if abs(currents[i]) > self.max_single_current:
@@ -646,23 +782,29 @@ def create_safety_filter(
         motor_ids=motor_ids,
         pair_horizontal=config.get('pair_horizontal', [16, 17]),
         pair_vertical=config.get('pair_vertical', [18, 19]),
-        max_pair_current=config.get('max_pair_current', 800.0),
-        max_single_current=config.get('max_single_current', 600.0),
+        max_pair_current=config.get('max_pair_current', 1000.0),  # <-- Updated default
+        max_single_current=config.get('max_single_current', 800.0),  # <-- Updated default
         max_position=config.get('max_position', 8000.0),
         min_voltage=config.get('min_voltage', 4.0),
         critical_voltage=config.get('critical_voltage', 3.5),
         voltage_scale_factor=config.get('voltage_scale_factor', 0.3),
+        temp_threshold=config.get('temp_threshold', 45.0),
+        temp_critical=config.get('temp_critical', 55.0),
+        temp_scale_factor=config.get('temp_scale_factor', 0.3),
         heavy_load_threshold=config.get('heavy_load_threshold', 400.0),
         critical_load_threshold=config.get('critical_load_threshold', 700.0),
         heavy_load_scale=config.get('heavy_load_scale', 0.3),
         moderate_load_scale=config.get('moderate_load_scale', 0.6),
         current_scale_factor=config.get('current_scale_factor', 0.25),
         position_scale_factor=config.get('position_scale_factor', 0.5),
-        tension_threshold=config.get('tension_threshold', 0.7),
+        min_tension_threshold=config.get('min_tension_threshold', 30.0),
         enable_current_safety=config.get('enable_current_safety', True),
         enable_position_safety=config.get('enable_position_safety', True),
         enable_tension_safety=config.get('enable_tension_safety', True),
         enable_voltage_safety=config.get('enable_voltage_safety', True),
         enable_current_aware_safety=config.get('enable_current_aware_safety', True),
+        enable_tension_constraint=config.get('enable_tension_constraint', True),
+        enable_temperature_safety=config.get('enable_temperature_safety', True),
+        enable_stuck_motor_safety=config.get('enable_stuck_motor_safety', True),
         log_interventions=config.get('log_interventions', True),
     )

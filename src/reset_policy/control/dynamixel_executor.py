@@ -206,20 +206,20 @@ class DynamixelExecutor:
         decoded = self.decode_hardware_error(hardware_status)
 
         # Console output
-        print(
-            f"\n[MOTOR DIAGNOSTICS] reason={reason} | motor={motor_id}\n"
-            f"  position : {position}\n"
-            f"  target   : {self.targets.get(motor_id)}\n"
-            f"  current  : {current} mA\n"
-            f"  voltage  : {voltage} V\n"
-            f"  temp     : {temperature} C\n"
-            f"  torque   : {torque}\n"
-            f"  PWM      : {pwm}\n"
-            f"  velocity : {velocity}\n"
-            f"  HW status: {hardware_status} ({self.format_hex(hardware_status)})\n"
-            f"  decoded  : {', '.join(decoded)}\n"
-            f"  packet error: {packet_error} ({self.format_hex(packet_error)})"
-        )
+        # print(
+        #     f"\n[MOTOR DIAGNOSTICS] reason={reason} | motor={motor_id}\n"
+        #     f"  position : {position}\n"
+        #     f"  target   : {self.targets.get(motor_id)}\n"
+        #     f"  current  : {current} mA\n"
+        #     f"  voltage  : {voltage} V\n"
+        #     f"  temp     : {temperature} C\n"
+        #     f"  torque   : {torque}\n"
+        #     f"  PWM      : {pwm}\n"
+        #     f"  velocity : {velocity}\n"
+        #     f"  HW status: {hardware_status} ({self.format_hex(hardware_status)})\n"
+        #     f"  decoded  : {', '.join(decoded)}\n"
+        #     f"  packet error: {packet_error} ({self.format_hex(packet_error)})"
+        # )
 
         # CSV logging
         try:
@@ -242,9 +242,9 @@ class DynamixelExecutor:
         packet_errors = packet_errors or {}
         hardware_statuses = hardware_statuses or {}
 
-        print("\n" + "=" * 48)
-        print(f"MOTOR DIAGNOSTIC SNAPSHOT: {reason}")
-        print("=" * 48)
+        # print("\n" + "=" * 48)
+        # print(f"MOTOR DIAGNOSTIC SNAPSHOT: {reason}")
+        # print("=" * 48)
 
         for motor in self.motor_ids:
             self.log_motor_diagnostics(
@@ -275,6 +275,27 @@ class DynamixelExecutor:
         if comm != COMM_SUCCESS or error != 0:
             return None
         return value
+
+    def read_temperature(self, motor_id):
+        """Read temperature for a motor."""
+        temp, comm, error = self.packet.read1ByteTxRx(
+            self.port,
+            motor_id,
+            ADDR_PRESENT_TEMPERATURE,
+        )
+        if comm != COMM_SUCCESS or error != 0:
+            return None
+        return float(temp)
+
+    def read_temperatures(self):
+        """Read temperatures for all motors."""
+        temperatures = []
+        for motor_id in self.motor_ids:
+            temp = self.read_temperature(motor_id)
+            if temp is None:
+                return None
+            temperatures.append(temp)
+        return np.array(temperatures, dtype=np.float32)
 
     def _get_motor_telemetry(self, motor_id):
         """Read a complete low-level telemetry snapshot for one motor."""
@@ -800,8 +821,50 @@ class DynamixelExecutor:
         
         print("  Gradual move complete")
 
-
-    # In dynamixel_executor.py
+    def move_motor_by_delta(self, motor_id: int, delta: int):
+        """
+        Move a single motor by a delta (encoder ticks).
+        
+        Args:
+            motor_id: Motor ID (16, 17, 18, 19)
+            delta: Number of encoder ticks to move (positive = pull, negative = release)
+        """
+        # Clamp delta to safe value
+        max_delta = 100
+        delta = max(-max_delta, min(max_delta, delta))
+        
+        # Update target for this motor
+        if motor_id in self.targets:
+            self.targets[motor_id] += delta
+            
+            # Clamp to position limits
+            lower_limit = self.initial_positions[motor_id] - 10000
+            upper_limit = self.initial_positions[motor_id] + 10000
+            self.targets[motor_id] = int(np.clip(self.targets[motor_id], lower_limit, upper_limit))
+        
+        # Build single motor command
+        target = self.targets[motor_id]
+        param = [
+            DXL_LOBYTE(DXL_LOWORD(target)),
+            DXL_HIBYTE(DXL_LOWORD(target)),
+            DXL_LOBYTE(DXL_HIWORD(target)),
+            DXL_HIBYTE(DXL_HIWORD(target)),
+        ]
+        
+        # Use group sync write for consistency
+        self.group_sync_write.clearParam()
+        if not self.group_sync_write.addParam(motor_id, param):
+            print(f"ERROR: Failed to add motor {motor_id}")
+            return False
+        
+        result = self.group_sync_write.txPacket()
+        self.group_sync_write.clearParam()
+        
+        if result != COMM_SUCCESS:
+            print(f"Move failed: {self.packet.getTxRxResult(result)}")
+            return False
+        
+        return True
 
     def recovery(self):
         """
