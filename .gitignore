@@ -5,7 +5,6 @@ output.txt
 
 experiments/checkpoints/
 experiments/videos/
-experiments/logs/
 
 *.mp4
 *.png
