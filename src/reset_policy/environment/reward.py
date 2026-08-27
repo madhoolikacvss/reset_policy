@@ -54,7 +54,7 @@ class RewardFunction:
         hardware_error_penalty: float = 1.0,   # Maximum penalty
         
         # Current change
-        current_change_weight: float = 0.5,    # Weight for change penalty
+        current_change_weight: float = 0.1,    # Weight for change penalty
         current_limit: float = 1750.0,         # Normalization constant
         
         # Tension
@@ -96,14 +96,17 @@ class RewardFunction:
         """
         Reward for visiting cells.
         
-        New cell: +1.0
-        Revisited cell: 0.0
-        
-        This simplifies the reward - just explore new areas.
+        visitation_count: 
+            0 = out of bounds / invalid
+            1 = first visit (new cell)
+            >1 = revisited cell
         """
         if visitation_count <= 0:
-            return self.new_cell_reward
-        return self.revisit_reward
+            return 0.0  # Out of bounds
+        elif visitation_count == 1:
+            return self.new_cell_reward  # +1.0 for new cell
+        else:
+            return self.revisit_reward  # 0.0 for revisited cell
     
     def current_reward(self, motor_currents: Sequence[float]) -> float:
         """
