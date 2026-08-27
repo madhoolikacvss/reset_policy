@@ -1,32 +1,14 @@
 """
 Reward function for the reset policy.
 
-Reward components:
+All reward components are normalized to [-1, 1] scale:
+- Coverage: +1 for new cell, 0 for revisited cell
+- Current: +0.5 for safe, -0.5 for moderate, -1.0 for high
+- Current change: 0 to -1 penalty for sudden changes
+- Hardware error: -1.0 (maximum penalty)
+- Tension: 0 to -1 penalty for high tension
 
-1. Coverage reward
-   - New cell: positive reward
-   - Previously visited cell: smaller positive reward
-
-2. Motor current reward/penalty
-   - Current < 500 mA: Positive reward (safe)
-   - 500 <= Current <= 1800 mA: Small negative reward (moderate)
-   - Current > 1800 mA: Large negative reward (high)
-
-3. Current-change penalty
-   - Penalizes sudden changes in motor current.
-
-4. Hardware error penalty
-   - Hardware error detected: Very large negative reward
-
-5. Tension penalty (NEW)
-   - Penalizes high tension (motors fighting each other)
-   - Tension = sum of absolute currents in a pair
-   - High tension = motors pulling against each other
-
-NOTE:
-    Episode termination is intentionally NOT handled here.
-    The environment should decide whether a hardware error
-    terminates the episode.
+Total reward is sum of components, typically in [-4, 2.5] range.
 """
 
 from __future__ import annotations
@@ -36,224 +18,163 @@ from typing import Sequence
 
 import numpy as np
 
+from reset_policy.config import config
+
 
 @dataclass
 class RewardBreakdown:
-
+    """Breakdown of reward components."""
     total: float
-
     coverage_reward: float
-
     current_reward: float
-
     current_change_penalty: float
-
     hardware_error_penalty: float
-
-    tension_penalty: float = 0.0  # <-- NEW
+    tension_penalty: float = 0.0
 
 
 class RewardFunction:
-
+    """Computes rewards with consistent [-1, 1] scale components."""
+    
     def __init__(
         self,
-
-        # -------------------------
         # Coverage
-        # -------------------------
-        coverage_weight: float = 1.0,
-
-        # -------------------------
-        # Current thresholds
-        # -------------------------
+        new_cell_reward: float = 1.0,      # +1 for new cell
+        revisit_reward: float = 0.0,       # 0 for revisited cell
+        
+        # Current thresholds (mA)
         safe_current_threshold: float = 500.0,
-        moderate_current_threshold: float = 1800.0,
-
-        # -------------------------
-        # Current rewards
-        # -------------------------
-        safe_current_reward: float = 0.1,
-        moderate_current_penalty: float = 0.5,
-        high_current_penalty: float = 5.0,
-
-        # -------------------------
+        high_current_threshold: float = 1800.0,
+        
+        # Current rewards (normalized)
+        safe_current_reward: float = 0.5,      # Positive but small
+        moderate_current_penalty: float = 0.3,  # Small penalty
+        high_current_penalty: float = 1.0,     # Maximum penalty
+        
         # Hardware error
-        # -------------------------
-        hardware_error_penalty: float = 50.0,
-
-        # -------------------------
+        hardware_error_penalty: float = 1.0,   # Maximum penalty
+        
         # Current change
-        # -------------------------
-        current_change_weight: float = 0.1,
-
-        # Dynamixel current limit
-        current_limit: float = 1750.0,
-
-        # -------------------------
-        # Tension penalty (NEW)
-        # -------------------------
-        tension_penalty_weight: float = 0.5,    # How much to penalize tension
-        tension_threshold: float = 400.0,       # mA - below this, no penalty
-        tension_max: float = 1500.0,            # mA - max penalty at this level
+        current_change_weight: float = 0.5,    # Weight for change penalty
+        current_limit: float = 1750.0,         # Normalization constant
+        
+        # Tension
+        tension_penalty_weight: float = 0.5,   # Weight for tension penalty
+        tension_threshold: float = 400.0,      # No penalty below this (mA)
+        tension_max: float = 1500.0,           # Max penalty at this (mA)
     ):
-
-        self.coverage_weight = coverage_weight
-
+        # Coverage
+        self.new_cell_reward = new_cell_reward
+        self.revisit_reward = revisit_reward
+        
+        # Current
         self.safe_current_threshold = safe_current_threshold
-        self.moderate_current_threshold = moderate_current_threshold
-
+        self.high_current_threshold = high_current_threshold
         self.safe_current_reward = safe_current_reward
         self.moderate_current_penalty = moderate_current_penalty
         self.high_current_penalty = high_current_penalty
-
+        
+        # Hardware error
         self.hardware_error_penalty = hardware_error_penalty
-
+        
+        # Current change
         self.current_change_weight = current_change_weight
         self.current_limit = current_limit
-
-        # NEW: Tension penalty params
+        
+        # Tension
         self.tension_penalty_weight = tension_penalty_weight
         self.tension_threshold = tension_threshold
         self.tension_max = tension_max
-
+        
+        # State
         self.prev_currents = None
-
-
-    # =========================================================
-    # Coverage reward
-    # =========================================================
-
-    def coverage_reward(
-        self,
-        visitation_count: int,
-    ) -> float:
+    
+    def reset(self):
+        """Reset internal state (call at episode start)."""
+        self.prev_currents = None
+    
+    def coverage_reward(self, visitation_count: int) -> float:
         """
-        Reward visiting cells with low visitation count.
-
-        First visit: +1.0
-        Second visit: +0.5
-        Third visit: +0.33
-        etc.
+        Reward for visiting cells.
+        
+        New cell: +1.0
+        Revisited cell: 0.0
+        
+        This simplifies the reward - just explore new areas.
         """
         if visitation_count <= 0:
-            return self.coverage_weight
-
-        return self.coverage_weight / visitation_count
-
-
-    # =========================================================
-    # Current reward
-    # =========================================================
-
-    def current_reward(
-        self,
-        motor_currents: Sequence[float],
-    ) -> float:
+            return self.new_cell_reward
+        return self.revisit_reward
+    
+    def current_reward(self, motor_currents: Sequence[float]) -> float:
         """
-        Compute reward/penalty based on maximum motor current.
-
-        Thresholds:
-            max current < 500 mA   -> +0.1
-            500 mA <= max current <= 1800 mA -> -0.5
-            max current > 1800 mA  -> -5.0
+        Reward/penalty based on maximum motor current.
+        
+        Safe (< 500 mA): +0.5
+        Moderate (500-1800 mA): -0.3
+        High (> 1800 mA): -1.0
         """
-        max_current = max(abs(float(current)) for current in motor_currents)
-
+        max_current = max(abs(float(c)) for c in motor_currents)
+        
         if max_current < self.safe_current_threshold:
             return self.safe_current_reward
-
-        elif max_current <= self.moderate_current_threshold:
+        elif max_current < self.high_current_threshold:
             return -self.moderate_current_penalty
-
         else:
             return -self.high_current_penalty
-
-
-    # =========================================================
-    # Current change penalty
-    # =========================================================
-
-    def current_change_penalty(
-        self,
-        motor_currents: Sequence[float],
-    ) -> float:
+    
+    def current_change_penalty(self, motor_currents: Sequence[float]) -> float:
         """
-        Penalize sudden changes in motor current.
+        Penalty for sudden current changes (0 to -1).
+        
+        Uses exponential scaling to heavily penalize large changes.
         """
         motor_currents = np.asarray(motor_currents, dtype=np.float32)
-
+        
         if self.prev_currents is None:
             self.prev_currents = motor_currents.copy()
             return 0.0
-
+        
+        # Calculate max change
         changes = np.abs(motor_currents - self.prev_currents)
         max_change = np.max(changes)
-
-        normalized_change = max_change / self.current_limit
-
+        
+        # Normalize to [0, 1]
+        normalized_change = np.clip(max_change / self.current_limit, 0, 1)
+        
+        # Update previous currents
         self.prev_currents = motor_currents.copy()
-
-        return self.current_change_weight * (normalized_change ** 2)
-
-
-    # =========================================================
-    # Hardware error penalty
-    # =========================================================
-
-    def hardware_error_penalty_value(
-        self,
-        hardware_error: bool,
-    ) -> float:
-        """Apply a very large penalty when a hardware error is detected."""
-        if hardware_error:
-            return -self.hardware_error_penalty
-        return 0.0
-
-
-    # =========================================================
-    # Tension penalty (NEW)
-    # =========================================================
-
-    def tension_penalty(
-        self,
-        motor_currents: Sequence[float],
-    ) -> float:
+        
+        # Penalty (0 for no change, -weight for max change)
+        return -self.current_change_weight * normalized_change
+    
+    def hardware_error_penalty_value(self, hardware_error: bool) -> float:
+        """Maximum penalty for hardware error."""
+        return -self.hardware_error_penalty if hardware_error else 0.0
+    
+    def tension_penalty(self, motor_currents: Sequence[float]) -> float:
         """
-        Compute penalty based on tension (motors fighting each other).
-
-        Tension is the sum of absolute currents in each pair:
-            - Horizontal pair: motors 16, 17 (indices 0, 1)
-            - Vertical pair: motors 18, 19 (indices 2, 3)
-
-        High tension = motors fighting each other = bad.
-        Penalty scales from 0 at tension_threshold to max at tension_max.
-
-        This teaches the policy to coordinate motors so they don't fight.
+        Penalty for high tension (0 to -1).
+        
+        Tension = sum of absolute currents in each pair.
+        High tension means motors are fighting each other.
         """
-        # Calculate tension for each pair
-        horizontal_tension = abs(float(motor_currents[0])) + abs(float(motor_currents[1]))
-        vertical_tension = abs(float(motor_currents[2])) + abs(float(motor_currents[3]))
-
-        # Use the max tension of the two pairs (most restrictive)
-        max_pair_tension = max(horizontal_tension, vertical_tension)
-
-        # No penalty if below threshold
-        if max_pair_tension <= self.tension_threshold:
+        # Calculate tensions
+        horizontal = abs(float(motor_currents[0])) + abs(float(motor_currents[1]))
+        vertical = abs(float(motor_currents[2])) + abs(float(motor_currents[3]))
+        max_tension = max(horizontal, vertical)
+        
+        # No penalty below threshold
+        if max_tension <= self.tension_threshold:
             return 0.0
-
-        # Scale penalty from 0 at threshold to 1 at tension_max
-        penalty_scale = min(
-            1.0,
-            (max_pair_tension - self.tension_threshold) / (self.tension_max - self.tension_threshold)
+        
+        # Linear scaling from 0 at threshold to -weight at max
+        normalized = np.clip(
+            (max_tension - self.tension_threshold) / (self.tension_max - self.tension_threshold),
+            0, 1
         )
-
-        return -self.tension_penalty_weight * penalty_scale
-
-
-    # =========================================================
-    # Total reward
-    # =========================================================
-
+        
+        return -self.tension_penalty_weight * normalized
+    
     def compute(
         self,
         visitation_count: int,
@@ -261,40 +182,36 @@ class RewardFunction:
         hardware_error: bool = False,
     ) -> RewardBreakdown:
         """
-        Compute the complete reward.
-
-        Total reward:
-            coverage
-            + current reward
-            - current-change penalty
-            + hardware-error penalty
-            - tension penalty (NEW)
+        Compute total reward.
+        
+        All components in [-1, 1]:
+        - Coverage: +1 (new) or 0 (revisit)
+        - Current: +0.5 (safe) to -1 (high)
+        - Current change: 0 to -0.5
+        - Hardware error: -1
+        - Tension: 0 to -0.5
+        
+        Total range: approximately [-3, 2]
         """
-
         coverage = self.coverage_reward(visitation_count)
-
         current = self.current_reward(motor_currents)
-
         change_penalty = self.current_change_penalty(motor_currents)
-
         hardware_penalty = self.hardware_error_penalty_value(hardware_error)
-
-        # NEW: Tension penalty
-        tension_penalty = self.tension_penalty(motor_currents)
-
+        tension = self.tension_penalty(motor_currents)
+        
         total = (
-            coverage
-            + current
-            - change_penalty
-            + hardware_penalty
-            + tension_penalty  # <-- tension_penalty is already negative
+            coverage +
+            current +
+            change_penalty +
+            hardware_penalty +
+            tension
         )
-
+        
         return RewardBreakdown(
             total=total,
             coverage_reward=coverage,
             current_reward=current,
             current_change_penalty=change_penalty,
             hardware_error_penalty=hardware_penalty,
-            tension_penalty=tension_penalty,  # <-- NEW
+            tension_penalty=tension,
         )

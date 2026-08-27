@@ -1,5 +1,5 @@
 """
-Low-level interface for executing RL actions on four Dynamixels.
+DynamixelExecutor: Low-level interface for controlling four Dynamixel XL330 motors.
 
 Responsibilities:
 - Initialize Dynamixels
@@ -10,8 +10,9 @@ Responsibilities:
 - Decode hardware errors
 - Log motor diagnostics
 - Enforce relative position limits
-- Recover motors after hardware shutdown
 - Shutdown safely
+
+Note: Hardware errors are FATAL - no recovery is attempted.
 """
 
 from __future__ import annotations
@@ -21,58 +22,43 @@ import time
 import numpy as np
 
 from dataclasses import dataclass
-from pathlib import Path
 from datetime import datetime
 
 from dynamixel_sdk import *
 
-
-# ============================================================
-# Dynamixel addresses
-# ============================================================
-
-ADDR_OPERATING_MODE = 11
-ADDR_TORQUE_ENABLE = 64
-ADDR_HARDWARE_ERROR_STATUS = 70
-ADDR_PRESENT_PWM = 124
-ADDR_PRESENT_CURRENT = 126
-ADDR_PRESENT_VELOCITY = 128
-ADDR_PRESENT_POSITION = 132
-ADDR_PRESENT_INPUT_VOLTAGE = 144
-ADDR_PRESENT_TEMPERATURE = 146
-ADDR_GOAL_POSITION = 116
-ADDR_REBOOT = 0x08  # Protocol 2.0 reboot instruction
+from reset_policy.config import config
 
 
-# ============================================================
-# Constants
-# ============================================================
+# Dynamixel addresses (from config)
+ADDR_OPERATING_MODE = config.dynamixel.addr_operating_mode
+ADDR_TORQUE_ENABLE = config.dynamixel.addr_torque_enable
+ADDR_HARDWARE_ERROR_STATUS = config.dynamixel.addr_hardware_error_status
+ADDR_PRESENT_PWM = config.dynamixel.addr_present_pwm
+ADDR_PRESENT_CURRENT = config.dynamixel.addr_present_current
+ADDR_PRESENT_VELOCITY = config.dynamixel.addr_present_velocity
+ADDR_PRESENT_POSITION = config.dynamixel.addr_present_position
+ADDR_PRESENT_INPUT_VOLTAGE = config.dynamixel.addr_present_input_voltage
+ADDR_PRESENT_TEMPERATURE = config.dynamixel.addr_present_temperature
+ADDR_GOAL_POSITION = config.dynamixel.addr_goal_position
 
-EXTENDED_POSITION_MODE = 4
-TORQUE_ENABLE = 1
-TORQUE_DISABLE = 0
+# Constants (from config)
+EXTENDED_POSITION_MODE = config.dynamixel.extended_position_mode
+TORQUE_ENABLE = config.dynamixel.torque_enable
+TORQUE_DISABLE = config.dynamixel.torque_disable
+MAX_ENCODER_DELTA = config.dynamixel.max_encoder_delta
+MAX_ENCODER_TRAVEL = config.dynamixel.max_encoder_travel
 
-# RL action [-1, 1] -> encoder delta
-MAX_ENCODER_DELTA = 200
-MAX_ENCODER_TRAVEL = 10000
+# Valid hardware error bits (Voltage, Temp, Shock, Overload)
+VALID_HW_ERROR_BITS = 0x01 | 0x04 | 0x10 | 0x20
 
-# Diagnostic logging
-DIAGNOSTIC_LOG_EVERY_N_ACTIONS = 1
-DIAGNOSTIC_LOG_DIR = (
-    Path(__file__).resolve().parent.parent.parent
-    / "scripts"
-    / "training_logs"
-)
-DIAGNOSTIC_LOG_FILE = DIAGNOSTIC_LOG_DIR / "motor_diagnostics.csv"
-ACTION_LOG_FILE = DIAGNOSTIC_LOG_DIR / "action_log.csv"
+# Position corruption threshold
+POSITION_CORRUPTION_THRESHOLD = 15000
 
 
-# ============================================================
 # Execution result
-# ============================================================
-
 @dataclass
 class ExecutionResult:
+    """Result of executing an RL action."""
     success: bool
     hardware_error: bool = False
     hardware_error_ids: list = None
@@ -86,12 +72,10 @@ class ExecutionResult:
             self.hardware_error_status = {}
 
 
-# ============================================================
 # Dynamixel Executor
-# ============================================================
-
 class DynamixelExecutor:
-
+    """Low-level Dynamixel motor controller."""
+    
     def __init__(
         self,
         port_handler,
@@ -117,23 +101,25 @@ class DynamixelExecutor:
         # Action counter
         self.action_count = 0
 
-        # Diagnostic logging
-        self.diagnostic_log_file = DIAGNOSTIC_LOG_FILE
-        self.action_log_file = ACTION_LOG_FILE
+        # Logging
+        self.diagnostic_log_file = config.training_log_dir / "motor_diagnostics.csv"
+        self.action_log_file = config.training_log_dir / "action_log.csv"
+        self._initialize_logs()
+
+    # Logging initialization    
+    def _initialize_logs(self):
+        """Initialize CSV log files."""
+        try:
+            config.training_log_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            print(f"WARNING: Could not create log directory: {e}")
+        
         self._initialize_diagnostic_log()
         self._initialize_action_log()
-
-        self.current_episode = 0
-        self.current_step = 0
-
-    # ========================================================
-    # Diagnostic logging
-    # ========================================================
-
+    
     def _initialize_diagnostic_log(self):
-        """Create the motor diagnostic CSV if it does not exist."""
+        """Create motor diagnostic CSV if it doesn't exist."""
         try:
-            self.diagnostic_log_file.parent.mkdir(parents=True, exist_ok=True)
             if not self.diagnostic_log_file.exists():
                 with open(self.diagnostic_log_file, "w", newline="") as f:
                     writer = csv.writer(f)
@@ -150,9 +136,8 @@ class DynamixelExecutor:
             print(f"WARNING: Could not initialize diagnostic log: {e}")
 
     def _initialize_action_log(self):
-        """Create the action-level CSV if it does not exist."""
+        """Create action-level CSV if it doesn't exist."""
         try:
-            self.diagnostic_log_file.parent.mkdir(parents=True, exist_ok=True)
             if not self.action_log_file.exists():
                 with open(self.action_log_file, "w", newline="") as f:
                     writer = csv.writer(f)
@@ -175,118 +160,138 @@ class DynamixelExecutor:
         except Exception as e:
             print(f"WARNING: Could not initialize action log: {e}")
 
-    def log_motor_diagnostics(self, motor_id, reason="periodic", packet_error=None, hardware_status=None):
-        """Read and log important motor telemetry."""
-        timestamp = datetime.now().isoformat()
-
-        # Read all telemetry
-        position = self._read4_raw(motor_id, ADDR_PRESENT_POSITION)
+    # Raw read operations    
+    def _read_raw(self, motor_id, address, size, signed=False):
+        """Generic read with retry."""
+        for attempt in range(2):  # Try twice
+            if size == 1:
+                value, comm, error = self.packet.read1ByteTxRx(self.port, motor_id, address)
+                if signed and value is not None and value >= 0x80:
+                    value -= 0x100
+            elif size == 2:
+                value, comm, error = self.packet.read2ByteTxRx(self.port, motor_id, address)
+                if signed and value is not None and value >= 0x8000:
+                    value -= 0x10000
+            elif size == 4:
+                value, comm, error = self.packet.read4ByteTxRx(self.port, motor_id, address)
+                if signed and value is not None and value >= 0x80000000:
+                    value -= 0x100000000
+            else:
+                return None
+            
+            if comm == COMM_SUCCESS and error == 0:
+                return value
+            
+            if attempt == 0:
+                time.sleep(0.02)  # Small delay before retry
         
-        current = self._read2_raw(motor_id, ADDR_PRESENT_CURRENT)
-        if current is not None and current >= 0x8000:
-            current -= 0x10000
-
-        voltage_raw = self._read2_raw(motor_id, ADDR_PRESENT_INPUT_VOLTAGE)
-        voltage = voltage_raw * 0.1 if voltage_raw is not None else None
-
-        temperature = self._read1_raw(motor_id, ADDR_PRESENT_TEMPERATURE)
-        torque = self._read1_raw(motor_id, ADDR_TORQUE_ENABLE)
-
-        pwm = self._read2_raw(motor_id, ADDR_PRESENT_PWM)
-        if pwm is not None and pwm >= 0x8000:
-            pwm -= 0x10000
-
-        velocity = self._read4_raw(motor_id, ADDR_PRESENT_VELOCITY)
-        if velocity is not None and velocity >= 0x80000000:
-            velocity -= 0x100000000
-
-        if hardware_status is None:
-            hardware_status = self._read1_raw(motor_id, ADDR_HARDWARE_ERROR_STATUS)
-
-        decoded = self.decode_hardware_error(hardware_status)
-
-        # Console output
-        # print(
-        #     f"\n[MOTOR DIAGNOSTICS] reason={reason} | motor={motor_id}\n"
-        #     f"  position : {position}\n"
-        #     f"  target   : {self.targets.get(motor_id)}\n"
-        #     f"  current  : {current} mA\n"
-        #     f"  voltage  : {voltage} V\n"
-        #     f"  temp     : {temperature} C\n"
-        #     f"  torque   : {torque}\n"
-        #     f"  PWM      : {pwm}\n"
-        #     f"  velocity : {velocity}\n"
-        #     f"  HW status: {hardware_status} ({self.format_hex(hardware_status)})\n"
-        #     f"  decoded  : {', '.join(decoded)}\n"
-        #     f"  packet error: {packet_error} ({self.format_hex(packet_error)})"
-        # )
-
-        # CSV logging
-        try:
-            with open(self.diagnostic_log_file, "a", newline="") as f:
-                writer = csv.writer(f)
-                writer.writerow([
-                    timestamp, self.action_count, motor_id,
-                    self.targets.get(motor_id), position,
-                    current, voltage, temperature,
-                    torque, pwm, velocity,
-                    hardware_status, self.format_hex(hardware_status),
-                    packet_error, self.format_hex(packet_error),
-                    ", ".join(decoded),
-                ])
-        except Exception as e:
-            print(f"WARNING: failed to write diagnostic log: {e}")
-
-    def log_all_motor_diagnostics(self, reason="periodic", packet_errors=None, hardware_statuses=None):
-        """Capture diagnostics for every motor."""
-        packet_errors = packet_errors or {}
-        hardware_statuses = hardware_statuses or {}
-
-        # print("\n" + "=" * 48)
-        # print(f"MOTOR DIAGNOSTIC SNAPSHOT: {reason}")
-        # print("=" * 48)
-
-        for motor in self.motor_ids:
-            self.log_motor_diagnostics(
-                motor,
-                reason=reason,
-                packet_error=packet_errors.get(motor),
-                hardware_status=hardware_statuses.get(motor),
-            )
-
-    # ========================================================
-    # Raw reads for diagnostics
-    # ========================================================
-
+        return None
+    
     def _read1_raw(self, motor_id, address):
-        value, comm, error = self.packet.read1ByteTxRx(self.port, motor_id, address)
-        if comm != COMM_SUCCESS or error != 0:
-            return None
-        return value
-
+        """Read 1 byte."""
+        return self._read_raw(motor_id, address, 1)
+    
     def _read2_raw(self, motor_id, address):
-        value, comm, error = self.packet.read2ByteTxRx(self.port, motor_id, address)
-        if comm != COMM_SUCCESS or error != 0:
-            return None
-        return value
-
+        """Read 2 bytes."""
+        return self._read_raw(motor_id, address, 2)
+    
     def _read4_raw(self, motor_id, address):
-        value, comm, error = self.packet.read4ByteTxRx(self.port, motor_id, address)
-        if comm != COMM_SUCCESS or error != 0:
-            return None
-        return value
+        """Read 4 bytes (signed)."""
+        return self._read_raw(motor_id, address, 4, signed=True)
 
+    # Telemetry    
+    def _get_motor_telemetry(self, motor_id):
+        """Read complete telemetry snapshot for one motor."""
+        return {
+            "position": self._read4_raw(motor_id, ADDR_PRESENT_POSITION),
+            "current": self._read_raw(motor_id, ADDR_PRESENT_CURRENT, 2, signed=True),
+            "voltage": self._read_raw(motor_id, ADDR_PRESENT_INPUT_VOLTAGE, 2) * 0.1 
+                      if self._read_raw(motor_id, ADDR_PRESENT_INPUT_VOLTAGE, 2) is not None else None,
+            "temperature": self._read1_raw(motor_id, ADDR_PRESENT_TEMPERATURE),
+            "torque": self._read1_raw(motor_id, ADDR_TORQUE_ENABLE),
+            "pwm": self._read_raw(motor_id, ADDR_PRESENT_PWM, 2, signed=True),
+            "velocity": self._read_raw(motor_id, ADDR_PRESENT_VELOCITY, 4, signed=True),
+            "hardware_status": self._read1_raw(motor_id, ADDR_HARDWARE_ERROR_STATUS),
+        }
+
+    # High-level read operations    
+    def read_position(self, motor_id):
+        """Read position for one motor with corruption check."""
+        pos = self._read4_raw(motor_id, ADDR_PRESENT_POSITION)
+        
+        if pos is None:
+            print(f"Motor {motor_id}: Failed to read position")
+            return None
+        
+        # Check for position corruption
+        if motor_id in self.initial_positions:
+            initial = self.initial_positions[motor_id]
+            if abs(pos - initial) > POSITION_CORRUPTION_THRESHOLD:
+                print(f"WARNING: Motor {motor_id} position corrupted!")
+                print(f"  Position: {pos}, Initial: {initial}")
+                
+                # Try to recover by re-reading
+                time.sleep(0.01)
+                pos = self._read4_raw(motor_id, ADDR_PRESENT_POSITION)
+                if pos is not None and abs(pos - initial) <= POSITION_CORRUPTION_THRESHOLD:
+                    print(f"  Recovered: {pos}")
+                    return pos
+                
+                # Try to fix by writing initial position
+                print(f"  Attempting position fix...")
+                self._write_goal_position_direct(motor_id, initial)
+                time.sleep(0.1)
+                pos = self._read4_raw(motor_id, ADDR_PRESENT_POSITION)
+                if pos is not None and abs(pos - initial) <= POSITION_CORRUPTION_THRESHOLD:
+                    print(f"  Fixed: {pos}")
+                    return pos
+        
+        return pos
+    
+    def read_positions(self):
+        """Read positions for all motors."""
+        positions = []
+        for motor_id in self.motor_ids:
+            pos = self.read_position(motor_id)
+            if pos is None:
+                return None
+            positions.append(pos)
+        return positions
+    
+    def read_current(self, motor_id):
+        """Read current for one motor (mA, signed)."""
+        return self._read_raw(motor_id, ADDR_PRESENT_CURRENT, 2, signed=True)
+    
+    def read_currents(self):
+        """Read currents for all motors."""
+        currents = []
+        for motor_id in self.motor_ids:
+            current = self.read_current(motor_id)
+            if current is None:
+                return None
+            currents.append(current)
+        return currents
+    
+    def read_voltage(self, motor_id):
+        """Read voltage for one motor (V)."""
+        voltage_raw = self._read_raw(motor_id, ADDR_PRESENT_INPUT_VOLTAGE, 2)
+        return voltage_raw * 0.1 if voltage_raw is not None else None
+    
+    def read_voltages(self):
+        """Read voltages for all motors."""
+        voltages = []
+        for motor_id in self.motor_ids:
+            voltage = self.read_voltage(motor_id)
+            if voltage is None:
+                return None
+            voltages.append(voltage)
+        return np.array(voltages, dtype=np.float32)
+    
     def read_temperature(self, motor_id):
-        """Read temperature for a motor."""
-        temp, comm, error = self.packet.read1ByteTxRx(
-            self.port,
-            motor_id,
-            ADDR_PRESENT_TEMPERATURE,
-        )
-        if comm != COMM_SUCCESS or error != 0:
-            return None
-        return float(temp)
-
+        """Read temperature for one motor (°C)."""
+        temp = self._read1_raw(motor_id, ADDR_PRESENT_TEMPERATURE)
+        return float(temp) if temp is not None else None
+    
     def read_temperatures(self):
         """Read temperatures for all motors."""
         temperatures = []
@@ -297,258 +302,170 @@ class DynamixelExecutor:
             temperatures.append(temp)
         return np.array(temperatures, dtype=np.float32)
 
-    def _get_motor_telemetry(self, motor_id):
-        """Read a complete low-level telemetry snapshot for one motor."""
-        position = self._read4_raw(motor_id, ADDR_PRESENT_POSITION)
-        if position is not None and position >= 0x80000000:
-            position -= 0x100000000
-
-        current = self._read2_raw(motor_id, ADDR_PRESENT_CURRENT)
-        if current is not None and current >= 0x8000:
-            current -= 0x10000
-
-        voltage_raw = self._read2_raw(motor_id, ADDR_PRESENT_INPUT_VOLTAGE)
-        voltage = voltage_raw * 0.1 if voltage_raw is not None else None
-
-        temperature = self._read1_raw(motor_id, ADDR_PRESENT_TEMPERATURE)
-        torque = self._read1_raw(motor_id, ADDR_TORQUE_ENABLE)
-
-        pwm = self._read2_raw(motor_id, ADDR_PRESENT_PWM)
-        if pwm is not None and pwm >= 0x8000:
-            pwm -= 0x10000
-
-        velocity = self._read4_raw(motor_id, ADDR_PRESENT_VELOCITY)
-        if velocity is not None and velocity >= 0x80000000:
-            velocity -= 0x100000000
-
-        hardware_status = self._read1_raw(motor_id, ADDR_HARDWARE_ERROR_STATUS)
-
-        return {
-            "position": position,
-            "current": current,
-            "voltage": voltage,
-            "temperature": temperature,
-            "torque": torque,
-            "pwm": pwm,
-            "velocity": velocity,
-            "hardware_status": hardware_status,
-        }
-
-    def _log_action(self, action, encoder_deltas, targets_before, targets_after, telemetry,
-                    packet_errors=None, success=True, hardware_error=False,
-                    hardware_error_ids=None, error_message=""):
-        """Write ONE CSV row for ONE RL action."""
-        packet_errors = packet_errors or {}
-        hardware_error_ids = hardware_error_ids or []
-
-        timestamp = datetime.now().isoformat()
-        row = [timestamp, self.action_count]
-
-        # RL action
-        row.extend([float(action[0]), float(action[1]), float(action[2]), float(action[3])])
-
-        # Encoder deltas
-        for motor in self.motor_ids:
-            row.append(encoder_deltas[motor])
-
-        # Targets before and after
-        for motor in self.motor_ids:
-            row.append(targets_before[motor])
-        for motor in self.motor_ids:
-            row.append(targets_after[motor])
-
-        # Telemetry
-        for motor in self.motor_ids:
-            row.append(telemetry[motor]["position"])
-        for motor in self.motor_ids:
-            row.append(telemetry[motor]["current"])
-        for motor in self.motor_ids:
-            row.append(telemetry[motor]["voltage"])
-        for motor in self.motor_ids:
-            row.append(telemetry[motor]["temperature"])
-        for motor in self.motor_ids:
-            row.append(telemetry[motor]["pwm"])
-        for motor in self.motor_ids:
-            row.append(telemetry[motor]["velocity"])
-        for motor in self.motor_ids:
-            row.append(telemetry[motor]["hardware_status"])
-        for motor in self.motor_ids:
-            row.append(packet_errors.get(motor))
-
-        # Result
-        row.extend([success, hardware_error, ",".join(str(x) for x in hardware_error_ids), error_message])
-
-        try:
-            with open(self.action_log_file, "a", newline="") as f:
-                csv.writer(f).writerow(row)
-        except Exception as e:
-            print(f"WARNING: failed to write action log: {e}")
-
-    # ========================================================
-    # Initialization
-    # ========================================================
-
-    def initialize(self):
-        print("Initializing Dynamixels...")
-
-        for motor in self.motor_ids:
-            self.write1(motor, ADDR_TORQUE_ENABLE, TORQUE_DISABLE)
-            self.write1(motor, ADDR_OPERATING_MODE, EXTENDED_POSITION_MODE)
-            self.write1(motor, ADDR_TORQUE_ENABLE, TORQUE_ENABLE)
-
-            pos = self.read_position(motor)
-            if pos is None:
-                raise RuntimeError(f"Could not read initial position of motor {motor}")
-
-            self.initial_positions[motor] = pos
-            self.targets[motor] = pos
-            print(f"Motor {motor}: initial position = {pos}")
-
-        self.log_all_motor_diagnostics(reason="initialization")
-        print("Initialization complete.")
-
-    # ========================================================
-    # Write operations
-    # ========================================================
-
-    def write1(self, motor, address, value):
-        comm, error = self.packet.write1ByteTxRx(self.port, motor, address, value)
+    # Write operations    
+    def write1(self, motor_id, address, value):
+        """Write 1 byte with error checking."""
+        comm, error = self.packet.write1ByteTxRx(self.port, motor_id, address, value)
         if comm != COMM_SUCCESS:
-            raise RuntimeError(f"Motor {motor}: {self.packet.getTxRxResult(comm)}")
+            raise RuntimeError(f"Motor {motor_id}: {self.packet.getTxRxResult(comm)}")
         if error != 0:
-            raise RuntimeError(f"Motor {motor}: {self.packet.getRxPacketError(error)}")
-
+            raise RuntimeError(f"Motor {motor_id}: {self.packet.getRxPacketError(error)}")
+    
     def _write_goal_position_direct(self, motor_id, target_position):
-        """Write a goal position directly (with error handling)."""
-        target_position = int(target_position)
-        # Clamp to 32-bit signed range
-        target_position = max(-2147483648, min(2147483647, target_position))
-
-        comm, error = self.packet.write4ByteTxRx(self.port, motor_id, ADDR_GOAL_POSITION, target_position)
-        if comm != COMM_SUCCESS:
-            print(f"Motor {motor_id}: Write failed - {self.packet.getTxRxResult(comm)}")
+        """Write goal position with error handling."""
+        target_position = int(np.clip(target_position, -2147483648, 2147483647))
+        
+        comm, error = self.packet.write4ByteTxRx(
+            self.port, motor_id, ADDR_GOAL_POSITION, target_position
+        )
+        
+        if comm != COMM_SUCCESS or error != 0:
+            print(f"Motor {motor_id}: Write failed")
             return False
-        if error != 0:
-            print(f"Motor {motor_id}: Write error - 0x{error:02X}")
-            return False
-
+        
         self.targets[motor_id] = target_position
         return True
-
-    # ========================================================
-    # Execute RL action
-    # ========================================================
-
-    def execute(self, action):
-        if len(action) != len(self.motor_ids):
-            raise ValueError("Action dimension does not match motors")
-
-        self.action_count += 1
-        action = np.asarray(action, dtype=np.float32)
-
-        print(f"\n{'='*60}")
-        print(f"RL ACTION #{self.action_count}")
-        print(f"timestamp: {datetime.now().isoformat()}")
-        print(f"raw action: {action}")
-        print("=" * 60)
-
-        # Save targets BEFORE action
-        targets_before = {motor: int(self.targets[motor]) for motor in self.motor_ids}
-
-        # Convert RL action -> encoder deltas
-        encoder_deltas = {}
-        targets_after = {}
-
-        for motor, delta in zip(self.motor_ids, action):
-            delta = np.clip(delta, -1.0, 1.0)
-            encoder_delta = int(delta * MAX_ENCODER_DELTA)
-            encoder_deltas[motor] = encoder_delta
-
-            self.targets[motor] += encoder_delta
-            # Relative safety limit
-            lower_limit = self.initial_positions[motor] - MAX_ENCODER_TRAVEL
-            upper_limit = self.initial_positions[motor] + MAX_ENCODER_TRAVEL
-            self.targets[motor] = int(np.clip(self.targets[motor], lower_limit, upper_limit))
-            targets_after[motor] = self.targets[motor]
-
-            print(f"  Motor {motor}: action={float(delta):+.5f} delta={encoder_delta:+d} target={targets_before[motor]} -> {self.targets[motor]}")
-
-        # Build and send synchronized packet
+    
+    def move_motor_by_delta(self, motor_id, delta, max_delta=100):
+        """Move a single motor by encoder delta."""
+        delta = max(-max_delta, min(max_delta, delta))
+        
+        if motor_id in self.targets:
+            self.targets[motor_id] += delta
+            
+            # Clamp to position limits
+            lower_limit = self.initial_positions[motor_id] - MAX_ENCODER_TRAVEL
+            upper_limit = self.initial_positions[motor_id] + MAX_ENCODER_TRAVEL
+            self.targets[motor_id] = int(np.clip(
+                self.targets[motor_id], lower_limit, upper_limit
+            ))
+        
+        # Send single motor command
+        return self._send_sync_write({motor_id: self.targets[motor_id]})
+    
+    def _send_sync_write(self, targets_dict):
+        """Send synchronized write to multiple motors."""
         self.group_sync_write.clearParam()
-        for motor in self.motor_ids:
-            target = self.targets[motor]
+        
+        for motor_id, target in targets_dict.items():
             param = [
                 DXL_LOBYTE(DXL_LOWORD(target)),
                 DXL_HIBYTE(DXL_LOWORD(target)),
                 DXL_LOBYTE(DXL_HIWORD(target)),
                 DXL_HIBYTE(DXL_HIWORD(target)),
             ]
-            if not self.group_sync_write.addParam(motor, param):
-                raise RuntimeError(f"Failed adding motor {motor}")
-
-        print("  Sending synchronized motor command...")
+            if not self.group_sync_write.addParam(motor_id, param):
+                print(f"ERROR: Failed to add motor {motor_id}")
+                return False
+        
         result = self.group_sync_write.txPacket()
         self.group_sync_write.clearParam()
-
-        # Communication failure
+        
         if result != COMM_SUCCESS:
-            print("\n!!! COMMUNICATION FAILURE !!!")
-            print(self.packet.getTxRxResult(result))
+            print(f"Sync write failed: {self.packet.getTxRxResult(result)}")
+            return False
+        
+        return True
 
-            telemetry = {motor: self._get_motor_telemetry(motor) for motor in self.motor_ids}
+    # Initialization    
+    def initialize(self):
+        """Initialize all motors."""
+        print("Initializing Dynamixels...")
+        
+        for motor in self.motor_ids:
+            self.write1(motor, ADDR_TORQUE_ENABLE, TORQUE_DISABLE)
+            self.write1(motor, ADDR_OPERATING_MODE, EXTENDED_POSITION_MODE)
+            self.write1(motor, ADDR_TORQUE_ENABLE, TORQUE_ENABLE)
+            
+            pos = self.read_position(motor)
+            if pos is None:
+                raise RuntimeError(f"Could not read initial position of motor {motor}")
+            
+            self.initial_positions[motor] = pos
+            self.targets[motor] = pos
+            print(f"Motor {motor}: initial position = {pos}")
+        
+        self.log_all_motor_diagnostics(reason="initialization")
+        print("Initialization complete.")
+
+    # Execute RL action    
+    def execute(self, action):
+        """Execute RL action."""
+        if len(action) != len(self.motor_ids):
+            raise ValueError("Action dimension does not match motors")
+        
+        self.action_count += 1
+        action = np.asarray(action, dtype=np.float32)
+        
+        print(f"\n{'='*60}")
+        print(f"RL ACTION #{self.action_count}")
+        print(f"raw action: {action}")
+        print("=" * 60)
+        
+        # Save targets before
+        targets_before = {m: int(self.targets[m]) for m in self.motor_ids}
+        
+        # Convert action to encoder deltas
+        encoder_deltas = {}
+        targets_after = {}
+        
+        for motor, action_val in zip(self.motor_ids, action):
+            action_val = np.clip(action_val, -1.0, 1.0)
+            encoder_delta = int(action_val * MAX_ENCODER_DELTA)
+            encoder_deltas[motor] = encoder_delta
+            
+            self.targets[motor] += encoder_delta
+            lower_limit = self.initial_positions[motor] - MAX_ENCODER_TRAVEL
+            upper_limit = self.initial_positions[motor] + MAX_ENCODER_TRAVEL
+            self.targets[motor] = int(np.clip(self.targets[motor], lower_limit, upper_limit))
+            targets_after[motor] = self.targets[motor]
+            
+            print(f"  Motor {motor}: action={action_val:+.5f} "
+                  f"delta={encoder_delta:+d} "
+                  f"target={targets_before[motor]} -> {self.targets[motor]}")
+        
+        # Send synchronized command
+        if not self._send_sync_write(targets_after):
+            print("\n!!! COMMUNICATION FAILURE !!!")
+            telemetry = {m: self._get_motor_telemetry(m) for m in self.motor_ids}
             self._log_action(
                 action, encoder_deltas, targets_before, targets_after, telemetry,
-                success=False, hardware_error=False,
-                error_message=self.packet.getTxRxResult(result)
+                success=False, error_message="Communication failure"
             )
-            self.log_all_motor_diagnostics(reason="communication_failure")
-            raise RuntimeError(f"Dynamixel communication failure: {self.packet.getTxRxResult(result)}")
-
-        print("  Command transmitted successfully.")
+            raise RuntimeError("Dynamixel communication failure")
+        
         time.sleep(0.02)
-
-        # Check Hardware Error Status
+        
+        # Check hardware errors
         hardware_error_ids = []
         hardware_error_status = {}
         packet_errors = {}
-
+        
         for motor in self.motor_ids:
-            status, packet_error = self.read_hardware_error_with_packet_error(motor)
+            status = self._read1_raw(motor, ADDR_HARDWARE_ERROR_STATUS)
             hardware_error_status[motor] = status
-            packet_errors[motor] = packet_error
-
-            if status is not None and status != 0:
-                valid_hw_bits = 0x01 | 0x04 | 0x10 | 0x20
-                if status & valid_hw_bits:
-                    hardware_error_ids.append(motor)
-                else:
-                    print(f"Motor {motor}: Ignoring unknown hardware status 0x{status:02X}")
-
-        # Read complete telemetry
-        telemetry = {motor: self._get_motor_telemetry(motor) for motor in self.motor_ids}
-
-        # Hardware error occurred
-        if len(hardware_error_ids) > 0:
-            message = f"Dynamixel hardware error detected. Motors: {hardware_error_ids}. Hardware status: {hardware_error_status}. Packet errors: {packet_errors}"
+            
+            if status is not None and status & VALID_HW_ERROR_BITS:
+                hardware_error_ids.append(motor)
+        
+        # Read telemetry
+        telemetry = {m: self._get_motor_telemetry(m) for m in self.motor_ids}
+        
+        # Handle hardware errors
+        if hardware_error_ids:
+            message = (f"Dynamixel hardware error. Motors: {hardware_error_ids}. "
+                      f"Status: {hardware_error_status}")
             print("\n" + "!" * 40)
             print(f"HARDWARE ERROR DURING ACTION #{self.action_count}")
             print(message)
             print("!" * 40)
-
+            
             self._log_action(
                 action, encoder_deltas, targets_before, targets_after, telemetry,
                 packet_errors=packet_errors, success=False, hardware_error=True,
                 hardware_error_ids=hardware_error_ids, error_message=message
             )
-
-            for motor in self.motor_ids:
-                self.log_motor_diagnostics(
-                    motor,
-                    reason=f"HARDWARE_ERROR_ACTION_{self.action_count}",
-                    packet_error=packet_errors.get(motor),
-                    hardware_status=hardware_error_status.get(motor),
-                )
-
+            
             return ExecutionResult(
                 success=False,
                 hardware_error=True,
@@ -556,226 +473,74 @@ class DynamixelExecutor:
                 hardware_error_status=hardware_error_status,
                 error_message=message,
             )
-
-        # Successful action
+        
+        # Success
         self._log_action(
             action, encoder_deltas, targets_before, targets_after, telemetry,
-            packet_errors=packet_errors, success=True, hardware_error=False,
-            hardware_error_ids=[], error_message=""
+            packet_errors=packet_errors, success=True
         )
-
+        
         # Print telemetry
         print(f"\nACTION #{self.action_count} TELEMETRY")
         for motor in self.motor_ids:
             t = telemetry[motor]
-            print(f"  Motor {motor}: pos={t['position']} target={self.targets[motor]} current={t['current']}mA voltage={t['voltage']}V temp={t['temperature']}C PWM={t['pwm']} velocity={t['velocity']} HW={t['hardware_status']}")
-
+            print(f"  Motor {motor}: pos={t['position']} target={self.targets[motor]} "
+                  f"current={t['current']}mA voltage={t['voltage']}V "
+                  f"temp={t['temperature']}°C PWM={t['pwm']} "
+                  f"velocity={t['velocity']} HW={t['hardware_status']}")
+        
         print(f"  ACTION #{self.action_count} SUCCESS")
-        print("=" * 60)
-
-        if self.action_count % DIAGNOSTIC_LOG_EVERY_N_ACTIONS == 0:
-            self.log_all_motor_diagnostics(reason=f"ACTION_{self.action_count}")
-
-        return ExecutionResult(
-            success=True,
-            hardware_error=False,
-            hardware_error_ids=[],
-            hardware_error_status=hardware_error_status,
-            error_message="",
-        )
-
-    # ========================================================
-    # Read operations
-    # ========================================================
-
-    def read_position(self, motor_id):
-        pos, dxl_comm_result, dxl_error = self.packet.read4ByteTxRx(self.port, motor_id, ADDR_PRESENT_POSITION)
-
-        if dxl_comm_result != COMM_SUCCESS:
-            print(f"Motor {motor_id}: Communication error reading position: {self.packet.getTxRxResult(dxl_comm_result)}")
-            return None
-
-        if dxl_error != 0:
-            print(f"Motor {motor_id}: Packet error reading position: 0x{dxl_error:02X} ({self.packet.getRxPacketError(dxl_error)})")
-            time.sleep(0.01)
-            pos, dxl_comm_result, dxl_error = self.packet.read4ByteTxRx(self.port, motor_id, ADDR_PRESENT_POSITION)
-            if dxl_comm_result == COMM_SUCCESS and dxl_error == 0:
-                if pos > 0x7FFFFFFF:
-                    pos -= 0x100000000
-                return pos
-            return None
-
-        if pos > 0x7FFFFFFF:
-            pos -= 0x100000000
-
-        # Check for position corruption
-        if motor_id in self.initial_positions:
-            initial = self.initial_positions[motor_id]
-            if pos is not None and abs(pos - initial) > 15000:
-                print(f"WARNING: Motor {motor_id} position is corrupted!")
-                print(f"  Position: {pos}, Initial: {initial}")
-
-                # Try to fix by reading again
-                time.sleep(0.01)
-                pos2, comm2, error2 = self.packet.read4ByteTxRx(self.port, motor_id, ADDR_PRESENT_POSITION)
-                if comm2 == COMM_SUCCESS and error2 == 0:
-                    if pos2 > 0x7FFFFFFF:
-                        pos2 -= 0x100000000
-                    if abs(pos2 - initial) <= 15000:
-                        print(f"  Second read: {pos2} (reasonable)")
-                        return pos2
-                    print(f"  Second read: {pos2} (still corrupted)")
-
-                # Try to fix by writing initial position
-                if pos is not None:
-                    print(f"  Attempting to fix Motor {motor_id} position...")
-                    self._write_goal_position_direct(motor_id, initial)
-                    time.sleep(0.1)
-                    pos3, comm3, error3 = self.packet.read4ByteTxRx(self.port, motor_id, ADDR_PRESENT_POSITION)
-                    if comm3 == COMM_SUCCESS and error3 == 0:
-                        if pos3 > 0x7FFFFFFF:
-                            pos3 -= 0x100000000
-                        if abs(pos3 - initial) <= 15000:
-                            print(f"  Fixed! New position: {pos3}")
-                            return pos3
-
-        return pos
-
-    def read_positions(self):
-        positions = []
-        for motor_id in self.motor_ids:
-            position = self.read_position(motor_id)
-            if position is None:
-                return None
-            positions.append(position)
-        return positions
-
-    def read_current(self, motor_id):
-        current, dxl_comm_result, dxl_error = self.packet.read2ByteTxRx(self.port, motor_id, ADDR_PRESENT_CURRENT)
-
-        if dxl_comm_result != COMM_SUCCESS:
-            print(f"Communication error reading current from motor {motor_id}: {self.packet.getTxRxResult(dxl_comm_result)}")
-            return None
-
-        if dxl_error != 0:
-            self._record_hardware_error(motor_id, dxl_error)
-            return None
-
-        if current >= 0x8000:
-            current -= 0x10000
-        return current
-
-    def read_currents(self):
-        currents = []
-        for motor_id in self.motor_ids:
-            current = self.read_current(motor_id)
-            if current is None:
-                time.sleep(0.05)
-                current = self.read_current(motor_id)
-                if current is None:
-                    return None
-            currents.append(current)
-        return currents
-
-    def read_voltage(self, motor_id):
-        voltage_raw, comm, error = self.packet.read2ByteTxRx(self.port, motor_id, ADDR_PRESENT_INPUT_VOLTAGE)
-        if comm != COMM_SUCCESS or error != 0:
-            return None
-        return voltage_raw * 0.1
-
-    def read_voltages(self):
-        voltages = []
-        for motor_id in self.motor_ids:
-            voltage = self.read_voltage(motor_id)
-            if voltage is None:
-                return None
-            voltages.append(voltage)
-        return np.array(voltages, dtype=np.float32)
-
-    # ========================================================
-    # Hardware error handling
-    # ========================================================
-
-    def read_hardware_error_with_packet_error(self, motor_id):
-        status, dxl_comm_result, dxl_error = self.packet.read1ByteTxRx(self.port, motor_id, ADDR_HARDWARE_ERROR_STATUS)
-
-        if dxl_comm_result != COMM_SUCCESS:
-            print(f"Motor {motor_id}: COMMUNICATION failure while reading status: {self.packet.getTxRxResult(dxl_comm_result)}")
-            return None, dxl_comm_result
-
-        if dxl_error != 0:
-            print(f"\nMotor {motor_id}: Protocol packet error while reading status: 0x{dxl_error:02X} ({self.packet.getRxPacketError(dxl_error)})")
-            if status is not None:
-                valid_hw_bits = 0x01 | 0x04 | 0x10 | 0x20
-                if status & valid_hw_bits:
-                    self._record_hardware_error(motor_id, status)
-                    return status, dxl_error
-                print(f"  Ignoring: Status=0x{status:02X} (not a valid hardware error)")
-                return 0, dxl_error
-            print(f"  No status received - communication issue")
-            return 0, dxl_error
-
-        if status is not None and status != 0:
-            valid_hw_bits = 0x01 | 0x04 | 0x10 | 0x20
-            if status & valid_hw_bits:
-                self._record_hardware_error(motor_id, status)
-                return status, None
-            print(f"Motor {motor_id}: Ignoring unknown hardware status 0x{status:02X}")
-            return 0, None
-
-        return 0, None
-
-    def read_hardware_error(self, motor_id):
-        status, _ = self.read_hardware_error_with_packet_error(motor_id)
-        return status
-
-    def _record_hardware_error(self, motor_id, error_code, message=None):
+        
+        return ExecutionResult(success=True)
+    
+    # Hardware error handling    
+    def _record_hardware_error(self, motor_id, error_code):
+        """Record hardware error for a motor."""
         self.hardware_error = True
         if motor_id not in self.hardware_error_ids:
             self.hardware_error_ids.append(motor_id)
-
+        
         self.hardware_error_status[motor_id] = error_code
-        decoded_errors = self.decode_hardware_error(error_code)
-
-        if message is None:
-            message = f"Motor {motor_id}: hardware error status {error_code} (0x{error_code:02X}) - {', '.join(decoded_errors)}"
-
-        self.hardware_error_message = message
-
+        decoded = self.decode_hardware_error(error_code)
+        self.hardware_error_message = (
+            f"Motor {motor_id}: status {error_code} (0x{error_code:02X}) - {', '.join(decoded)}"
+        )
+        
         print("\n!!! DYNAMIXEL HARDWARE ERROR !!!")
         print(f"Motor ID: {motor_id}")
-        print(f"Hardware Error Status: {error_code} (0x{error_code:02X})")
-        print(f"Decoded: {', '.join(decoded_errors)}")
-
+        print(f"Status: {error_code} (0x{error_code:02X})")
+        print(f"Decoded: {', '.join(decoded)}")
+    
     def get_hardware_error_state(self):
+        """Get hardware error state."""
         return (
             self.hardware_error,
             self.hardware_error_ids.copy(),
             self.hardware_error_status.copy(),
             self.hardware_error_message,
         )
-
+    
     def clear_hardware_errors(self):
+        """Clear hardware error state."""
         self.hardware_error = False
         self.hardware_error_ids.clear()
         self.hardware_error_status.clear()
         self.hardware_error_message = None
-
+    
     @staticmethod
     def format_hex(value):
-        if value is None:
-            return "None"
-        return f"0x{int(value):02X}"
-
+        """Format value as hex string."""
+        return "None" if value is None else f"0x{int(value):02X}"
+    
     @staticmethod
     def decode_hardware_error(status):
-        """Decode XL330 Hardware Error Status (address 70)."""
+        """Decode XL330 hardware error status."""
         if status is None:
             return ["No hardware status available"]
-
+        
         status = int(status)
         errors = []
-
+        
         if status & 0x01:
             errors.append("Input voltage error")
         if status & 0x04:
@@ -784,146 +549,150 @@ class DynamixelExecutor:
             errors.append("Electrical shock")
         if status & 0x20:
             errors.append("Overload")
-
-        known_mask = 0x01 | 0x04 | 0x10 | 0x20
-        unknown_bits = status & ~known_mask
+        
+        unknown_bits = status & ~VALID_HW_ERROR_BITS
         if unknown_bits:
-            errors.append(f"Unknown hardware bits 0x{unknown_bits:02X}")
-
+            errors.append(f"Unknown bits 0x{unknown_bits:02X}")
+        
         return errors if errors else ["No hardware error"]
-
-    def move_to_positions_gradual(self, target_positions: dict, step_size: int = 200):
-        """
-        Move motors to target positions in small steps.
-        """
-        # Read current positions
-        current = self.read_positions()
-        if current is None:
-            print("  Failed to read current positions")
+    
+    # Logging    
+    def log_motor_diagnostics(self, motor_id, reason="periodic", packet_error=None, hardware_status=None):
+        """Log diagnostic data for one motor."""
+        timestamp = datetime.now().isoformat()
+        telemetry = self._get_motor_telemetry(motor_id)
+        
+        if hardware_status is None:
+            hardware_status = telemetry["hardware_status"]
+        
+        decoded = self.decode_hardware_error(hardware_status)
+        
+        try:
+            with open(self.diagnostic_log_file, "a", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    timestamp, self.action_count, motor_id,
+                    self.targets.get(motor_id), telemetry["position"],
+                    telemetry["current"], telemetry["voltage"], telemetry["temperature"],
+                    telemetry["torque"], telemetry["pwm"], telemetry["velocity"],
+                    hardware_status, self.format_hex(hardware_status),
+                    packet_error, self.format_hex(packet_error),
+                    ", ".join(decoded),
+                ])
+        except Exception as e:
+            print(f"WARNING: failed to write diagnostic log: {e}")
+    
+    def log_all_motor_diagnostics(self, reason="periodic", packet_errors=None, hardware_statuses=None):
+        """Log diagnostics for all motors."""
+        packet_errors = packet_errors or {}
+        hardware_statuses = hardware_statuses or {}
+        
+        for motor in self.motor_ids:
+            self.log_motor_diagnostics(
+                motor,
+                reason=reason,
+                packet_error=packet_errors.get(motor),
+                hardware_status=hardware_statuses.get(motor),
+            )
+    
+    def _log_action(self, action, encoder_deltas, targets_before, targets_after, telemetry,
+                    packet_errors=None, success=True, hardware_error=False,
+                    hardware_error_ids=None, error_message=""):
+        """Write one CSV row for one RL action."""
+        packet_errors = packet_errors or {}
+        hardware_error_ids = hardware_error_ids or []
+        
+        timestamp = datetime.now().isoformat()
+        row = [timestamp, self.action_count]
+        
+        # RL action
+        row.extend([float(a) for a in action])
+        
+        # Encoder deltas
+        row.extend([encoder_deltas[m] for m in self.motor_ids])
+        
+        # Targets
+        row.extend([targets_before[m] for m in self.motor_ids])
+        row.extend([targets_after[m] for m in self.motor_ids])
+        
+        # Telemetry
+        for key in ["position", "current", "voltage", "temperature", "pwm", "velocity", "hardware_status"]:
+            row.extend([telemetry[m][key] for m in self.motor_ids])
+        
+        # Packet errors
+        row.extend([packet_errors.get(m) for m in self.motor_ids])
+        
+        # Result
+        row.extend([success, hardware_error, ",".join(map(str, hardware_error_ids)), error_message])
+        
+        try:
+            with open(self.action_log_file, "a", newline="") as f:
+                csv.writer(f).writerow(row)
+        except Exception as e:
+            print(f"WARNING: failed to write action log: {e}")
+    
+    # Shutdown    
+    def shutdown(self):
+        """Shutdown all motors safely using sync write."""
+        print("\n========== EXECUTOR SHUTDOWN ==========")
+        
+        # Wait for any in-progress command to complete
+        print("Waiting for in-progress commands to complete...")
+        time.sleep(2.0)
+        
+        # Check port availability
+        try:
+            port_available = self.port.is_open if self.port else False
+        except:
+            port_available = False
+        
+        if not port_available:
+            print("Port not available - cannot disable torque")
             return
         
-        current_dict = {motor: pos for motor, pos in zip(self.motor_ids, current)}
+        print("Disabling all motors via sync write...")
         
-        # Calculate max steps needed
-        max_dist = max(abs(target_positions.get(m, current_dict[m]) - current_dict[m]) 
-                    for m in self.motor_ids)
-        num_steps = max(1, int(max_dist / step_size) + 1)
-        
-        print(f"  Moving gradually in {num_steps} steps")
-        
-        for step in range(num_steps):
-            progress = (step + 1) / num_steps
-            for motor in self.motor_ids:
-                target = target_positions.get(motor, current_dict[motor])
-                intermediate = int(current_dict[motor] + (target - current_dict[motor]) * progress)
-                self._write_goal_position_direct(motor, intermediate)
-            time.sleep(0.05)
-        
-        print("  Gradual move complete")
-
-    def move_motor_by_delta(self, motor_id: int, delta: int):
-        """
-        Move a single motor by a delta (encoder ticks).
-        
-        Args:
-            motor_id: Motor ID (16, 17, 18, 19)
-            delta: Number of encoder ticks to move (positive = pull, negative = release)
-        """
-        # Clamp delta to safe value
-        max_delta = 100
-        delta = max(-max_delta, min(max_delta, delta))
-        
-        # Update target for this motor
-        if motor_id in self.targets:
-            self.targets[motor_id] += delta
+        # Use sync write to disable all motors at once
+        try:
+            # Create a temporary sync write for torque enable (address 64, 1 byte)
+            # Note: Your current GroupSyncWrite is for goal position (address 116, 4 bytes)
+            # We need a different approach for 1-byte writes
             
-            # Clamp to position limits
-            lower_limit = self.initial_positions[motor_id] - 10000
-            upper_limit = self.initial_positions[motor_id] + 10000
-            self.targets[motor_id] = int(np.clip(self.targets[motor_id], lower_limit, upper_limit))
+            # Method 1: Individual writes with retry
+            for motor in self.motor_ids:
+                for attempt in range(3):  # Try 3 times
+                    try:
+                        comm, error = self.packet.write1ByteTxRx(
+                            self.port,
+                            motor,
+                            ADDR_TORQUE_ENABLE,
+                            TORQUE_DISABLE
+                        )
+                        
+                        if comm == COMM_SUCCESS and error == 0:
+                            print(f"  Motor {motor}: torque disabled")
+                            break
+                        else:
+                            if attempt < 2:
+                                print(f"  Motor {motor}: retry {attempt+1}...")
+                                time.sleep(0.5)
+                            else:
+                                print(f"  Motor {motor}: failed after 3 attempts")
+                    except Exception as e:
+                        if attempt < 2:
+                            print(f"  Motor {motor}: exception, retrying...")
+                            time.sleep(0.5)
+                        else:
+                            print(f"  Motor {motor}: failed - {e}")
+        except Exception as e:
+            print(f"Torque disable error: {e}")
         
-        # Build single motor command
-        target = self.targets[motor_id]
-        param = [
-            DXL_LOBYTE(DXL_LOWORD(target)),
-            DXL_HIBYTE(DXL_LOWORD(target)),
-            DXL_LOBYTE(DXL_HIWORD(target)),
-            DXL_HIBYTE(DXL_HIWORD(target)),
-        ]
+        # Close port
+        try:
+            if self.port and self.port.is_open:
+                self.port.closePort()
+                print("Port closed")
+        except Exception as e:
+            print(f"Port close error: {e}")
         
-        # Use group sync write for consistency
-        self.group_sync_write.clearParam()
-        if not self.group_sync_write.addParam(motor_id, param):
-            print(f"ERROR: Failed to add motor {motor_id}")
-            return False
-        
-        result = self.group_sync_write.txPacket()
-        self.group_sync_write.clearParam()
-        
-        if result != COMM_SUCCESS:
-            print(f"Move failed: {self.packet.getTxRxResult(result)}")
-            return False
-        
-        return True
-
-    def recovery(self):
-        """
-        Simple recovery: attempt to re-establish communication with all motors.
-        """
-        print("\n================ RECOVERY ================")
-        
-        # 1. Wait for motors to settle
-        print("Waiting for motors to settle...")
-        time.sleep(3.0)
-        
-        # 2. Try to read positions from all motors
-        print("Checking motor communication...")
-        all_ok = True
-        for motor in self.motor_ids:
-            pos = self.read_position(motor)
-            if pos is None:
-                print(f"  Motor {motor}: No response")
-                all_ok = False
-                # Try waiting a little more
-                time.sleep(2.0)
-                pos = self.read_position(motor)
-                if pos is not None:
-                    print(f"  Motor {motor}: Recovered!")
-                else:
-                    print(f"  Motor {motor}: Still unresponsive")
-                    return False
-            else:
-                print(f"  Motor {motor}: OK (pos={pos})")
-        
-        # 3. Clear hardware error flags
-        self.clear_hardware_errors()
-        
-        print("Recovery complete.")
-        print("==========================================\n")
-        
-        return all_ok
-
-    # ========================================================
-    # Shutdown
-    # ========================================================
-
-    def shutdown(self):
-        print("\n========== EXECUTOR SHUTDOWN ==========")
-
-        print("Disabling motors...")
-        for motor in self.motor_ids:
-            try:
-                self.write1(motor, ADDR_TORQUE_ENABLE, TORQUE_DISABLE)
-                print(f"  Motor {motor}: torque disabled")
-            except Exception as e:
-                print(f"  Motor {motor}: failed to disable torque: {e}")
-
-        if hasattr(self, 'port') and self.port is not None:
-            try:
-                if self.port.is_open:
-                    self.port.closePort()
-                    print("Port closed")
-            except Exception as e:
-                print(f"Port close error: {e}")
-
         print("========== SHUTDOWN COMPLETE ==========\n")
