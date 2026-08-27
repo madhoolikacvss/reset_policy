@@ -81,12 +81,18 @@ class ResetPolicyEnv(gym.Env):
         # Rendering
         self.render_mode = render_mode
         self.renderer = None
-        if render_mode in ("human", "rgb_array"):
-            self.renderer = BoardRenderer(
-                board_width_cm=(self.grid.x_max - self.grid.x_min) * 100,
-                board_height_cm=(self.grid.y_max - self.grid.y_min) * 100,
-                cell_size_cm=self.grid.cell_size * 100,
-            )
+        # if render_mode in ("human", "rgb_array"):
+        #     self.renderer = BoardRenderer(
+        #         board_width_cm=(self.grid.x_max - self.grid.x_min) * 100,
+        #         board_height_cm=(self.grid.y_max - self.grid.y_min) * 100,
+        #         cell_size_cm=self.grid.cell_size * 100,
+        #     )
+
+        self.renderer = BoardRenderer(
+            board_width_cm=(self.grid.y_max - self.grid.y_min) * 100,  # Y range = width
+            board_height_cm=(self.grid.x_max - self.grid.x_min) * 100,  # X range = height
+            cell_size_cm=self.grid.cell_size * 100,
+        )
         
         # State tracking
         self.step_count = 0
