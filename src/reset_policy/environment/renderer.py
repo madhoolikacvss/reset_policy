@@ -23,16 +23,16 @@ class BoardRenderer:
     
     def __init__(
         self,
-        board_width_cm=80,
-        board_height_cm=55,
+        board_width_cm=80,   # Horizontal extent (Y axis)
+        board_height_cm=55,  # Vertical extent (X axis)
         cell_size_cm=1,
         save_dir=None,
         save_every_n=5,
         max_saved_plots=200,
         max_trajectory_points=500,
     ):
-        self.width = board_width_cm
-        self.height = board_height_cm
+        self.width = board_width_cm    # Horizontal (Y)
+        self.height = board_height_cm  # Vertical (X)
         self.cell_size = cell_size_cm
         
         # Setup save directory
@@ -48,14 +48,14 @@ class BoardRenderer:
         # Episode tracking
         self.episode_count = 0
         self.step_count = 0
-        self.trajectory = []
+        self.trajectory = []  # List of (y_cm, x_cm) tuples
         
         # Track saved episodes
         self.saved_episodes = set()
         
         print(f"Renderer: Headless mode (saving to {self.save_dir})")
         print(f"  Save every {save_every_n} episodes")
-        print(f"  Board: {board_width_cm}x{board_height_cm} cm")
+        print(f"  Board: {board_width_cm}x{board_height_cm} cm (Y x X)")
     
     def update_episode(self, episode):
         """Start a new episode."""
@@ -67,15 +67,15 @@ class BoardRenderer:
         """
         Update current step and record position.
         
-        Note: Parameters are (y, x) to match coordinate system
-        where Y is horizontal and X is vertical.
+        Args:
+            cube_y_cm: Y position in cm (horizontal)
+            cube_x_cm: X position in cm (vertical)
         """
         self.step_count = step
         self.trajectory.append((cube_y_cm, cube_x_cm))
         
         # Limit trajectory size
         if len(self.trajectory) > self.max_trajectory_points:
-            # Keep every other point
             self.trajectory = self.trajectory[::2]
     
     def render(self, cube_y_cm, cube_x_cm, occupancy_grid=None, coverage=None, 
@@ -84,14 +84,10 @@ class BoardRenderer:
         Render current state.
         
         Args:
-            cube_y_cm: Cube Y position in cm (horizontal)
-            cube_x_cm: Cube X position in cm (vertical)
-            occupancy_grid: 2D numpy array of visit counts
-            coverage: Coverage ratio (0-1)
-            action: Current action (optional)
-            mode: "human" or "rgb_array"
+            cube_y_cm: Y position in cm (horizontal)
+            cube_x_cm: X position in cm (vertical)
         """
-        # Clamp cube position for display
+        # Clamp for display
         cube_y_clamped = max(0, min(self.width, cube_y_cm))
         cube_x_clamped = max(0, min(self.height, cube_x_cm))
         
@@ -103,19 +99,23 @@ class BoardRenderer:
         # Create figure
         fig, ax = plt.subplots(figsize=(12, 8))
         
-        # Board setup (Y horizontal, X vertical)
-        ax.set_xlim(0, self.width)
-        ax.set_ylim(0, self.height)
+        # Board setup
+        ax.set_xlim(0, self.width)    # Horizontal (Y)
+        ax.set_ylim(0, self.height)   # Vertical (X)
         ax.set_aspect("equal")
         ax.set_xlabel("Y (cm) - Horizontal")
         ax.set_ylabel("X (cm) - Vertical")
         ax.set_title(f"Episode {self.episode_count}, Step {self.step_count}")
         
-        # 1. Occupancy heatmap (from OccupancyGrid)
+        # 1. Occupancy heatmap
         if occupancy_grid is not None and occupancy_grid.size > 0:
-            # Normalize
-            max_visits = np.max(occupancy_grid) if np.max(occupancy_grid) > 0 else 1
-            heatmap_normalized = occupancy_grid / max_visits
+            # Transpose if needed: grid is [rows=X, cols=Y], imshow wants [Y, X]
+            # occupancy_grid shape: (rows, cols) = (X_cells, Y_cells)
+            # For imshow with extent=[0, width, 0, height], we need (Y_cells, X_cells)
+            heatmap_display = occupancy_grid.T  # Transpose to (Y, X)
+            
+            max_visits = np.max(heatmap_display) if np.max(heatmap_display) > 0 else 1
+            heatmap_normalized = heatmap_display / max_visits
             
             im = ax.imshow(
                 heatmap_normalized,
@@ -155,6 +155,11 @@ class BoardRenderer:
                 zorder=8,
                 label='Start',
             )
+            
+            # Debug print
+            print(f"[RENDER] Trajectory points: {len(self.trajectory)}")
+            print(f"[RENDER] First: (y={traj_y[0]:.1f}, x={traj_x[0]:.1f})")
+            print(f"[RENDER] Last: (y={traj_y[-1]:.1f}, x={traj_x[-1]:.1f})")
         
         # 3. Current position
         ax.scatter(
@@ -167,6 +172,9 @@ class BoardRenderer:
             linewidth=2,
             label='Current',
         )
+        
+        # Debug print
+        print(f"[RENDER] Cube: y={cube_y_cm:.1f}, x={cube_x_cm:.1f}, OOB={out_of_bounds}")
         
         # 4. Information panel
         info_lines = []
@@ -219,9 +227,12 @@ class BoardRenderer:
     def save_final_render(self, occupancy_grid=None, coverage=None):
         """Save final render at episode end."""
         if not self.trajectory:
+            print("[RENDER] No trajectory to render")
             return None
         
         last_y, last_x = self.trajectory[-1]
+        print(f"[RENDER] Final: y={last_y:.1f}, x={last_x:.1f}")
+        
         return self.render(
             cube_y_cm=last_y,
             cube_x_cm=last_x,
