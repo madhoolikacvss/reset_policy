@@ -1,17 +1,11 @@
 """
 Visualization for Reset Policy environment.
-
-Displays:
-- Board with proper coordinate system (Y horizontal, X vertical)
-- Cube trajectory (path taken during episode)
-- Occupancy heatmap (from OccupancyGrid)
-- Current cube position
 """
 
 from __future__ import annotations
 
 import matplotlib
-matplotlib.use('Agg')  # Headless backend
+matplotlib.use('Agg')
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -23,19 +17,18 @@ class BoardRenderer:
     
     def __init__(
         self,
-        board_width_cm=80,   # Horizontal extent (Y axis)
-        board_height_cm=55,  # Vertical extent (X axis)
+        board_width_cm=80,
+        board_height_cm=55,
         cell_size_cm=1,
         save_dir=None,
         save_every_n=5,
         max_saved_plots=200,
         max_trajectory_points=500,
     ):
-        self.width = board_width_cm    # Horizontal (Y)
-        self.height = board_height_cm  # Vertical (X)
+        self.width = board_width_cm
+        self.height = board_height_cm
         self.cell_size = cell_size_cm
         
-        # Setup save directory
         if save_dir is None:
             save_dir = Path(__file__).resolve().parent.parent.parent / "logs" / "renderings"
         self.save_dir = Path(save_dir)
@@ -45,17 +38,14 @@ class BoardRenderer:
         self.max_saved_plots = max_saved_plots
         self.max_trajectory_points = max_trajectory_points
         
-        # Episode tracking
         self.episode_count = 0
         self.step_count = 0
-        self.trajectory = []  # List of (y_cm, x_cm) tuples
-        
-        # Track saved episodes
+        self.trajectory = []  # List of (cube_x_cm, cube_y_cm) tuples
         self.saved_episodes = set()
         
         print(f"Renderer: Headless mode (saving to {self.save_dir})")
         print(f"  Save every {save_every_n} episodes")
-        print(f"  Board: {board_width_cm}x{board_height_cm} cm (Y x X)")
+        print(f"  Board: {board_width_cm}x{board_height_cm} cm")
     
     def update_episode(self, episode):
         """Start a new episode."""
@@ -63,59 +53,47 @@ class BoardRenderer:
         self.step_count = 0
         self.trajectory = []
     
-    def update_step(self, step, cube_y_cm, cube_x_cm):
+    def update_step(self, step, cube_x_cm, cube_y_cm):
         """
         Update current step and record position.
         
         Args:
-            cube_y_cm: Y position in cm (horizontal)
             cube_x_cm: X position in cm (vertical)
+            cube_y_cm: Y position in cm (horizontal)
         """
         self.step_count = step
-        self.trajectory.append((cube_y_cm, cube_x_cm))
+        self.trajectory.append((cube_x_cm, cube_y_cm))
         
-        # Limit trajectory size
         if len(self.trajectory) > self.max_trajectory_points:
             self.trajectory = self.trajectory[::2]
     
-    def render(self, cube_y_cm, cube_x_cm, occupancy_grid=None, coverage=None, 
+    def render(self, cube_x_cm, cube_y_cm, occupancy_grid=None, coverage=None, 
                action=None, mode="human"):
-        """
-        Render current state.
+        """Render current state."""
         
-        Args:
-            cube_y_cm: Y position in cm (horizontal)
-            cube_x_cm: X position in cm (vertical)
-        """
         # Clamp for display
-        cube_y_clamped = max(0, min(self.width, cube_y_cm))
         cube_x_clamped = max(0, min(self.height, cube_x_cm))
+        cube_y_clamped = max(0, min(self.width, cube_y_cm))
         
         out_of_bounds = (
-            cube_y_cm < 0 or cube_y_cm > self.width or
-            cube_x_cm < 0 or cube_x_cm > self.height
+            cube_x_cm < 0 or cube_x_cm > self.height or
+            cube_y_cm < 0 or cube_y_cm > self.width
         )
         
-        # Create figure
-        fig, ax = plt.subplots(figsize=(12, 8))
+        fig, ax = plt.subplots(figsize=(10, 8))
         
-        # Board setup
-        ax.set_xlim(0, self.width)    # Horizontal (Y)
-        ax.set_ylim(0, self.height)   # Vertical (X)
+        # Setup axes
+        ax.set_xlim(0, self.width)
+        ax.set_ylim(0, self.height)
         ax.set_aspect("equal")
         ax.set_xlabel("Y (cm) - Horizontal")
         ax.set_ylabel("X (cm) - Vertical")
         ax.set_title(f"Episode {self.episode_count}, Step {self.step_count}")
         
-        # 1. Occupancy heatmap
+        # 1. Heatmap
         if occupancy_grid is not None and occupancy_grid.size > 0:
-            # Transpose if needed: grid is [rows=X, cols=Y], imshow wants [Y, X]
-            # occupancy_grid shape: (rows, cols) = (X_cells, Y_cells)
-            # For imshow with extent=[0, width, 0, height], we need (Y_cells, X_cells)
-            heatmap_display = occupancy_grid.T  # Transpose to (Y, X)
-            
-            max_visits = np.max(heatmap_display) if np.max(heatmap_display) > 0 else 1
-            heatmap_normalized = heatmap_display / max_visits
+            max_visits = np.max(occupancy_grid) if np.max(occupancy_grid) > 0 else 1
+            heatmap_normalized = occupancy_grid / max_visits
             
             im = ax.imshow(
                 heatmap_normalized,
@@ -131,10 +109,10 @@ class BoardRenderer:
             cbar = fig.colorbar(im, ax=ax, shrink=0.8)
             cbar.set_label('Visit Density')
         
-        # 2. Trajectory path
+        # 2. Trajectory
         if len(self.trajectory) > 1:
-            traj_y = [p[0] for p in self.trajectory]  # Horizontal
-            traj_x = [p[1] for p in self.trajectory]  # Vertical
+            traj_x = [p[0] for p in self.trajectory]  # Vertical
+            traj_y = [p[1] for p in self.trajectory]  # Horizontal
             
             ax.plot(
                 traj_y, traj_x,
@@ -144,7 +122,6 @@ class BoardRenderer:
                 label='Path',
             )
             
-            # Start position
             ax.scatter(
                 traj_y[0], traj_x[0],
                 s=150,
@@ -155,11 +132,6 @@ class BoardRenderer:
                 zorder=8,
                 label='Start',
             )
-            
-            # Debug print
-            print(f"[RENDER] Trajectory points: {len(self.trajectory)}")
-            print(f"[RENDER] First: (y={traj_y[0]:.1f}, x={traj_x[0]:.1f})")
-            print(f"[RENDER] Last: (y={traj_y[-1]:.1f}, x={traj_x[-1]:.1f})")
         
         # 3. Current position
         ax.scatter(
@@ -173,15 +145,12 @@ class BoardRenderer:
             label='Current',
         )
         
-        # Debug print
-        print(f"[RENDER] Cube: y={cube_y_cm:.1f}, x={cube_x_cm:.1f}, OOB={out_of_bounds}")
-        
-        # 4. Information panel
+        # 4. Info panel
         info_lines = []
         if coverage is not None:
             info_lines.append(f"Coverage: {coverage:.2%}")
         if out_of_bounds:
-            info_lines.append(f"OUT OF BOUNDS! (Y:{cube_y_cm:.1f}, X:{cube_x_cm:.1f})")
+            info_lines.append(f"OUT OF BOUNDS! (X:{cube_x_cm:.1f}, Y:{cube_y_cm:.1f})")
         if action is not None:
             info_lines.append(f"Action: [{action[0]:+.2f}, {action[1]:+.2f}, {action[2]:+.2f}, {action[3]:+.2f}]")
         info_lines.append(f"Steps: {len(self.trajectory)}")
@@ -199,7 +168,7 @@ class BoardRenderer:
         # 5. Legend
         ax.legend(loc='upper right')
         
-        # 6. Save plot
+        # 6. SAVE SECTION (WAS MISSING!)
         saved_path = None
         should_save = (
             self.episode_count % self.save_every_n == 0 and
@@ -230,12 +199,11 @@ class BoardRenderer:
             print("[RENDER] No trajectory to render")
             return None
         
-        last_y, last_x = self.trajectory[-1]
-        print(f"[RENDER] Final: y={last_y:.1f}, x={last_x:.1f}")
+        last_x, last_y = self.trajectory[-1]  # Unpack (x, y)
         
         return self.render(
-            cube_y_cm=last_y,
             cube_x_cm=last_x,
+            cube_y_cm=last_y,
             occupancy_grid=occupancy_grid,
             coverage=coverage,
         )

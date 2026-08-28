@@ -92,7 +92,7 @@ class SafetyConfig:
     single_motor_tension_critical: float = 700.0
     
     # Reactive current scaling
-    current_scale_factor: float = 0.25
+    current_scale_factor: float = 0.15
     
     # Feature flags
     enable_current_safety: bool = True
@@ -124,8 +124,8 @@ class EnvironmentConfig:
     safety_penalty_weight: float = 1.0
     
     # Board bounds (meters)
-    x_min: float = -0.76
-    x_max: float = -0.47
+    x_min: float = -0.95
+    x_max: float = 0
     y_min: float = -0.94
     y_max: float = 0.10
     

@@ -116,10 +116,12 @@ class ResetPolicyEnv(gym.Env):
         """Reset environment for new episode."""
         super().reset(seed=seed)
         self.episode_count += 1
-        time.sleep(5)
+        time.sleep(3)
         
         print("\n================ ENV RESET ================")
         self.reward_fn.prev_currents = None
+        if self.renderer is not None:
+            self.renderer.update_episode(self.episode_count)
         
         # Check if hardware error occurred previously
         if self.hardware_error_occurred:
@@ -214,10 +216,15 @@ class ResetPolicyEnv(gym.Env):
         self.last_valid_observation = observation
         
         # Update renderer
+        # if self.renderer is not None:
+        #     cube_y_cm = (observation.cube_y - self.grid.y_min) * 100
+        #     cube_x_cm = (observation.cube_x - self.grid.x_min) * 100
+        #     self.renderer.update_step(self.step_count, cube_y_cm, cube_x_cm)
+
         if self.renderer is not None:
-            cube_y_cm = (observation.cube_y - self.grid.y_min) * 100
             cube_x_cm = (observation.cube_x - self.grid.x_min) * 100
-            self.renderer.update_step(self.step_count, cube_y_cm, cube_x_cm)
+            cube_y_cm = (observation.cube_y - self.grid.y_min) * 100
+            self.renderer.update_step(self.step_count, cube_x_cm, cube_y_cm)
         
         # Check out of bounds
         x, y = observation.cube_x, observation.cube_y
@@ -688,8 +695,8 @@ class ResetPolicyEnv(gym.Env):
         cube_y_cm = (observation.cube_y - self.grid.y_min) * 100
         
         return self.renderer.render(
-            cube_y=cube_y_cm,
-            cube_x=cube_x_cm,
+            cube_x_cm=cube_x_cm,
+            cube_y_cm=cube_y_cm,
             occupancy_grid=self.grid.as_numpy(),
             coverage=self.grid.coverage(),
             mode=self.render_mode,
@@ -708,11 +715,11 @@ class ResetPolicyEnv(gym.Env):
         cube_y_cm = (observation.cube_y - self.grid.y_min) * 100
         
         return self.renderer.render(
-            cube_y=cube_y_cm,
-            cube_x=cube_x_cm,
+            cube_x_cm=cube_x_cm,
+            cube_y_cm=cube_y_cm,
             occupancy_grid=self.grid.as_numpy(),
             coverage=self.grid.coverage(),
-            mode="human",
+            mode=self.render_mode,
         )
     
     def close(self):

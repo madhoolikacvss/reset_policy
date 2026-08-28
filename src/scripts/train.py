@@ -5,6 +5,7 @@ Training loop for PPO on Reset Policy environment.
 import numpy as np
 import torch
 from pathlib import Path
+import time
 import sys
 sys.path.append(
     str(Path(__file__).resolve().parent.parent)
@@ -38,6 +39,37 @@ def train(env, config=config):
         start_episode = checkpoint.get('episode', 0) + 1
         steps_since_update = checkpoint.get('steps_since_update', 0)
         print(f"Resuming from episode {start_episode}\n")
+
+        print("\nChecking motor positions...")
+        executor = env.executor
+        
+        for motor_id in executor.motor_ids:
+            initial_pos = executor.initial_positions[motor_id]
+            current_pos = executor.read_position(motor_id)
+            
+            if current_pos is not None:
+                delta = abs(current_pos - initial_pos)
+                print(f"  Motor {motor_id}: current={current_pos}, initial={initial_pos}, delta={delta}")
+                
+                # Reset to initial position (same as fresh start)
+                executor._write_goal_position_direct(motor_id, initial_pos)
+                executor.targets[motor_id] = initial_pos
+            else:
+                print(f"  Motor {motor_id}: Cannot read position!")
+        
+        # Wait for motors to settle
+        print("  Waiting for motors to settle...")
+        time.sleep(2)
+        
+        # Verify positions
+        print("  Verifying positions...")
+        positions = executor.read_positions()
+        if positions is not None:
+            for motor_id, pos in zip(executor.motor_ids, positions):
+                initial = executor.initial_positions[motor_id]
+                print(f"    Motor {motor_id}: {pos} (initial: {initial})")
+        
+        print("  Motor reset complete\n")
     
     for episode in range(start_episode, config.training.episodes):
         # Start episode logging
@@ -166,12 +198,23 @@ def train(env, config=config):
               f"Reason: {info.get('termination_reason', 'unknown')}")
         
         # Save render
+        # if hasattr(env, 'renderer') and env.renderer is not None:
+        #     env.renderer.save_final_render(
+        #         env.grid.as_numpy(),
+        #         env.grid.coverage(),
+        #     )
         if hasattr(env, 'renderer') and env.renderer is not None:
-            env.renderer.save_final_render(
-                env.grid.as_numpy(),
-                env.grid.coverage(),
-            )
-        
+            # Get last observation for cube position
+            if env.last_valid_observation is not None:
+                cube_x_cm = (env.last_valid_observation.cube_x - env.grid.x_min) * 100
+                cube_y_cm = (env.last_valid_observation.cube_y - env.grid.y_min) * 100
+                
+                env.renderer.render(
+                    cube_x_cm=cube_x_cm,
+                    cube_y_cm=cube_y_cm,
+                    occupancy_grid=env.grid.as_numpy(),
+                    coverage=env.grid.coverage(),
+                )
         # Checkpoint
         if (episode + 1) % config.training.save_every == 0:
             checkpoint_path = config.checkpoint_dir / f"ppo_checkpoint_{episode + 1}.pth"

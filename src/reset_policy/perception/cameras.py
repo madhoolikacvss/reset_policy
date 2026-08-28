@@ -84,6 +84,7 @@ class CameraPair:
     def read(self, timeout: float = 5.0) -> tuple[np.ndarray, np.ndarray]:
         deadline = time.monotonic() + timeout
         while True:
+            time.sleep(0.2)
             with self._lock:
                 external = self._frames["external"]
                 wrist = self._frames["wrist"]
@@ -92,7 +93,6 @@ class CameraPair:
                 return external, wrist
             if time.monotonic() > deadline:
                 raise CameraError("Timed out waiting for camera frames")
-            time.sleep(0.002)
 
     def close(self) -> None:
         self._running = False
