@@ -94,6 +94,7 @@ def train(env, config=config):
             'safety_interventions': 0,
             'hardware_error_ids': set(),
             'safety_reasons': {},  
+            'safety_penalty_by_reason': {},
         }
         
         # Update renderer for new episode
@@ -116,10 +117,16 @@ def train(env, config=config):
             if info.get("action_modified", False):
                 episode_stats['safety_interventions'] += 1
                 
-                # Track safety reason
                 reason = info.get("safety_reason", "unknown")
+                safety_penalty = info.get("safety_penalty", 0.0)
+                
+                # Track counts
                 episode_stats['safety_reasons'][reason] = episode_stats['safety_reasons'].get(reason, 0) + 1
+                
+                # Track penalty sums
+                episode_stats['safety_penalty_by_reason'][reason] = episode_stats['safety_penalty_by_reason'].get(reason, 0.0) + safety_penalty
 
+                
             positions_after = env.executor.read_positions()
             targets_after = [env.executor.targets.get(m, None) for m in env.executor.motor_ids]
             

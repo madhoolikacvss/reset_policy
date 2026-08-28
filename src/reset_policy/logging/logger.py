@@ -73,7 +73,7 @@ class TrainingLogger:
                     "safety_interventions",
                     "hardware_error",
                     "hardware_error_ids",
-                    # Safety intervention breakdown
+                    # Safety intervention counts
                     "current_aware_scaling_count",
                     "temperature_high_count",
                     "temperature_critical_count",
@@ -88,6 +88,21 @@ class TrainingLogger:
                     "position_limit_pull_count",
                     "position_limit_release_count",
                     "motor_stuck_count",
+                    # Safety penalty sums
+                    "safety_penalty_current_aware_scaling",
+                    "safety_penalty_temperature_high",
+                    "safety_penalty_temperature_critical",
+                    "safety_penalty_voltage_low",
+                    "safety_penalty_voltage_critical",
+                    "safety_penalty_tension_safety",
+                    "safety_penalty_opposing_motors",
+                    "safety_penalty_tension_too_low",
+                    "safety_penalty_high_horizontal_current",
+                    "safety_penalty_high_vertical_current",
+                    "safety_penalty_single_motor_over_current",
+                    "safety_penalty_position_limit_pull",
+                    "safety_penalty_position_limit_release",
+                    "safety_penalty_motor_stuck",
                 ])
     
     def _initialize_training_metrics_log(self):
@@ -197,6 +212,9 @@ class TrainingLogger:
     def log_episode(self, episode_num, episode_reward, info, steps, 
                     terminated, truncated, episode_stats):
         """Log episode summary."""
+        safety_reasons = episode_stats.get('safety_reasons', {})
+        safety_penalties = episode_stats.get('safety_penalty_by_reason', {})
+        
         row = [
             episode_num,
             episode_reward,
@@ -217,21 +235,36 @@ class TrainingLogger:
             episode_stats.get('safety_interventions', 0),
             bool(episode_stats.get('hardware_error_ids', set())),
             ",".join(map(str, sorted(episode_stats.get('hardware_error_ids', set())))),
-            # Safety intervention breakdown
-            episode_stats.get('safety_reasons', {}).get('current_aware_scaling', 0),
-            episode_stats.get('safety_reasons', {}).get('temperature_high', 0),
-            episode_stats.get('safety_reasons', {}).get('temperature_critical', 0),
-            episode_stats.get('safety_reasons', {}).get('voltage_low', 0),
-            episode_stats.get('safety_reasons', {}).get('voltage_critical', 0),
-            episode_stats.get('safety_reasons', {}).get('tension_safety', 0),
-            episode_stats.get('safety_reasons', {}).get('opposing_motors', 0),
-            episode_stats.get('safety_reasons', {}).get('tension_too_low', 0),
-            episode_stats.get('safety_reasons', {}).get('high_horizontal_current', 0),
-            episode_stats.get('safety_reasons', {}).get('high_vertical_current', 0),
-            episode_stats.get('safety_reasons', {}).get('single_motor_over_current', 0),
-            episode_stats.get('safety_reasons', {}).get('position_limit_pull', 0),
-            episode_stats.get('safety_reasons', {}).get('position_limit_release', 0),
-            episode_stats.get('safety_reasons', {}).get('motor_stuck', 0),
+            # Safety intervention counts
+            safety_reasons.get('current_aware_scaling', 0),
+            safety_reasons.get('temperature_high', 0),
+            safety_reasons.get('temperature_critical', 0),
+            safety_reasons.get('voltage_low', 0),
+            safety_reasons.get('voltage_critical', 0),
+            safety_reasons.get('tension_safety', 0),
+            safety_reasons.get('opposing_motors', 0),
+            safety_reasons.get('tension_too_low', 0),
+            safety_reasons.get('high_horizontal_current', 0),
+            safety_reasons.get('high_vertical_current', 0),
+            safety_reasons.get('single_motor_over_current', 0),
+            safety_reasons.get('position_limit_pull', 0),
+            safety_reasons.get('position_limit_release', 0),
+            safety_reasons.get('motor_stuck', 0),
+            # Safety penalty sums
+            safety_penalties.get('current_aware_scaling', 0.0),
+            safety_penalties.get('temperature_high', 0.0),
+            safety_penalties.get('temperature_critical', 0.0),
+            safety_penalties.get('voltage_low', 0.0),
+            safety_penalties.get('voltage_critical', 0.0),
+            safety_penalties.get('tension_safety', 0.0),
+            safety_penalties.get('opposing_motors', 0.0),
+            safety_penalties.get('tension_too_low', 0.0),
+            safety_penalties.get('high_horizontal_current', 0.0),
+            safety_penalties.get('high_vertical_current', 0.0),
+            safety_penalties.get('single_motor_over_current', 0.0),
+            safety_penalties.get('position_limit_pull', 0.0),
+            safety_penalties.get('position_limit_release', 0.0),
+            safety_penalties.get('motor_stuck', 0.0),
         ]
         
         with open(self.episodes_file, "a", newline="") as f:
