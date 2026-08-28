@@ -93,6 +93,7 @@ def train(env, config=config):
             'max_current': 0.0,
             'safety_interventions': 0,
             'hardware_error_ids': set(),
+            'safety_reasons': {},  
         }
         
         # Update renderer for new episode
@@ -106,15 +107,32 @@ def train(env, config=config):
             with torch.no_grad():
                 action, log_prob, value = actor_critic.act(state_tensor)
             
+            positions_before = env.executor.read_positions()
+            targets_before = [env.executor.targets.get(m, None) for m in env.executor.motor_ids]
+
             action_np = action.cpu().numpy().astype(np.float32)
             next_state, reward, terminated, truncated, info = env.step(action_np)
+
+            if info.get("action_modified", False):
+                episode_stats['safety_interventions'] += 1
+                
+                # Track safety reason
+                reason = info.get("safety_reason", "unknown")
+                episode_stats['safety_reasons'][reason] = episode_stats['safety_reasons'].get(reason, 0) + 1
+
+            positions_after = env.executor.read_positions()
+            targets_after = [env.executor.targets.get(m, None) for m in env.executor.motor_ids]
             
             # Log motor data for this step
             motor_data = {
+                'targets': targets_after if targets_after else targets_before,
+                'positions': positions_after if positions_after else positions_before,
                 'currents': info.get('motor_currents', [None]*4),
                 'voltages': info.get('motor_voltages', [None]*4),
                 'temperatures': info.get('motor_temperatures', [None]*4),
+                'actions': action_np.tolist(),
             }
+
             logger.log_step(
                 step_num=steps + 1,
                 action_count=env.executor.action_count if hasattr(env, 'executor') else 0,

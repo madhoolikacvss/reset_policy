@@ -112,7 +112,7 @@ class SafetyConfig:
 class EnvironmentConfig:
     """Environment and training settings."""
     # Episode settings
-    max_steps: int = 200
+    max_steps: int = 300
     target_coverage: float = 0.95
     
     # Current thresholds for termination
@@ -121,7 +121,7 @@ class EnvironmentConfig:
     high_current_threshold: float = 2500.0
     
     # Safety penalty
-    safety_penalty_weight: float = 1.0
+    safety_penalty_weight: float = 0.7
     
     # Board bounds (meters)
     x_min: float = -0.95

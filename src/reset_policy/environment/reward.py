@@ -58,8 +58,8 @@ class RewardFunction:
         current_limit: float = 1750.0,         # Normalization constant
         
         # Tension
-        tension_penalty_weight: float = 0.5,   # Weight for tension penalty
-        tension_threshold: float = 400.0,      # No penalty below this (mA)
+        tension_penalty_weight: float = 0.3,   # Weight for tension penalty
+        tension_threshold: float = 500.0,      # No penalty below this (mA)
         tension_max: float = 1500.0,           # Max penalty at this (mA)
     ):
         # Coverage
