@@ -163,30 +163,42 @@ class DynamixelExecutor:
     # Raw read operations    
     def _read_raw(self, motor_id, address, size, signed=False):
         """Generic read with retry."""
-        for attempt in range(2):  # Try twice
-            if size == 1:
-                value, comm, error = self.packet.read1ByteTxRx(self.port, motor_id, address)
-                if signed and value is not None and value >= 0x80:
-                    value -= 0x100
-            elif size == 2:
-                value, comm, error = self.packet.read2ByteTxRx(self.port, motor_id, address)
-                if signed and value is not None and value >= 0x8000:
-                    value -= 0x10000
-            elif size == 4:
-                value, comm, error = self.packet.read4ByteTxRx(self.port, motor_id, address)
-                if signed and value is not None and value >= 0x80000000:
-                    value -= 0x100000000
-            else:
+        # Check if port is still available
+        try:
+            if not hasattr(self, 'port') or self.port is None or not self.port.is_open:
                 return None
-            
-            if comm == COMM_SUCCESS and error == 0:
-                return value
-            
-            if attempt == 0:
-                time.sleep(0.02)  # Small delay before retry
+        except:
+            return None
+        
+        for attempt in range(2):  # Try twice
+            try:
+                if size == 1:
+                    value, comm, error = self.packet.read1ByteTxRx(self.port, motor_id, address)
+                    if signed and value is not None and value >= 0x80:
+                        value -= 0x100
+                elif size == 2:
+                    value, comm, error = self.packet.read2ByteTxRx(self.port, motor_id, address)
+                    if signed and value is not None and value >= 0x8000:
+                        value -= 0x10000
+                elif size == 4:
+                    value, comm, error = self.packet.read4ByteTxRx(self.port, motor_id, address)
+                    if signed and value is not None and value >= 0x80000000:
+                        value -= 0x100000000
+                else:
+                    return None
+                
+                if comm == COMM_SUCCESS and error == 0:
+                    return value
+                
+                if attempt == 0:
+                    time.sleep(0.02)  # Small delay before retry
+            except Exception as e:
+                # Port might have been closed
+                print(f"Read error for motor {motor_id}: {e}")
+                return None
         
         return None
-    
+        
     def _read1_raw(self, motor_id, address):
         """Read 1 byte."""
         return self._read_raw(motor_id, address, 1)
@@ -202,11 +214,36 @@ class DynamixelExecutor:
     # Telemetry    
     def _get_motor_telemetry(self, motor_id):
         """Read complete telemetry snapshot for one motor."""
+        # Check if port is available
+        try:
+            if not hasattr(self, 'port') or self.port is None or not self.port.is_open:
+                return {
+                    "position": None,
+                    "current": None,
+                    "voltage": None,
+                    "temperature": None,
+                    "torque": None,
+                    "pwm": None,
+                    "velocity": None,
+                    "hardware_status": None,
+                }
+        except:
+            return {
+                "position": None,
+                "current": None,
+                "voltage": None,
+                "temperature": None,
+                "torque": None,
+                "pwm": None,
+                "velocity": None,
+                "hardware_status": None,
+            }
+        
         return {
             "position": self._read4_raw(motor_id, ADDR_PRESENT_POSITION),
             "current": self._read_raw(motor_id, ADDR_PRESENT_CURRENT, 2, signed=True),
             "voltage": self._read_raw(motor_id, ADDR_PRESENT_INPUT_VOLTAGE, 2) * 0.1 
-                      if self._read_raw(motor_id, ADDR_PRESENT_INPUT_VOLTAGE, 2) is not None else None,
+                    if self._read_raw(motor_id, ADDR_PRESENT_INPUT_VOLTAGE, 2) is not None else None,
             "temperature": self._read1_raw(motor_id, ADDR_PRESENT_TEMPERATURE),
             "torque": self._read1_raw(motor_id, ADDR_TORQUE_ENABLE),
             "pwm": self._read_raw(motor_id, ADDR_PRESENT_PWM, 2, signed=True),
@@ -394,6 +431,21 @@ class DynamixelExecutor:
         if len(action) != len(self.motor_ids):
             raise ValueError("Action dimension does not match motors")
         
+        # Check if port is still open
+        try:
+            if not hasattr(self, 'port') or self.port is None or not self.port.is_open:
+                print("ERROR: Port is closed - cannot execute action")
+                return ExecutionResult(
+                    success=False,
+                    error_message="Port is closed"
+                )
+        except:
+            print("ERROR: Port not available - cannot execute action")
+            return ExecutionResult(
+                success=False,
+                error_message="Port not available"
+            )
+        
         self.action_count += 1
         action = np.asarray(action, dtype=np.float32)
         
@@ -421,8 +473,8 @@ class DynamixelExecutor:
             targets_after[motor] = self.targets[motor]
             
             print(f"  Motor {motor}: action={action_val:+.5f} "
-                  f"delta={encoder_delta:+d} "
-                  f"target={targets_before[motor]} -> {self.targets[motor]}")
+                f"delta={encoder_delta:+d} "
+                f"target={targets_before[motor]} -> {self.targets[motor]}")
         
         # Send synchronized command
         if not self._send_sync_write(targets_after):
@@ -448,13 +500,21 @@ class DynamixelExecutor:
             if status is not None and status & VALID_HW_ERROR_BITS:
                 hardware_error_ids.append(motor)
         
-        # Read telemetry
-        telemetry = {m: self._get_motor_telemetry(m) for m in self.motor_ids}
+        # Read telemetry (with error handling for closed port)
+        try:
+            telemetry = {m: self._get_motor_telemetry(m) for m in self.motor_ids}
+        except Exception as e:
+            print(f"ERROR: Could not read telemetry: {e}")
+            # Return with hardware error if we can't read telemetry
+            return ExecutionResult(
+                success=False,
+                error_message=f"Could not read telemetry: {e}"
+            )
         
         # Handle hardware errors
         if hardware_error_ids:
             message = (f"Dynamixel hardware error. Motors: {hardware_error_ids}. "
-                      f"Status: {hardware_error_status}")
+                    f"Status: {hardware_error_status}")
             print("\n" + "!" * 40)
             print(f"HARDWARE ERROR DURING ACTION #{self.action_count}")
             print(message)
@@ -485,9 +545,9 @@ class DynamixelExecutor:
         for motor in self.motor_ids:
             t = telemetry[motor]
             print(f"  Motor {motor}: pos={t['position']} target={self.targets[motor]} "
-                  f"current={t['current']}mA voltage={t['voltage']}V "
-                  f"temp={t['temperature']}°C PWM={t['pwm']} "
-                  f"velocity={t['velocity']} HW={t['hardware_status']}")
+                f"current={t['current']}mA voltage={t['voltage']}V "
+                f"temp={t['temperature']}°C PWM={t['pwm']} "
+                f"velocity={t['velocity']} HW={t['hardware_status']}")
         
         print(f"  ACTION #{self.action_count} SUCCESS")
         
