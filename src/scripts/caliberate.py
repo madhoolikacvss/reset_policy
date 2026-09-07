@@ -8,7 +8,7 @@ import numpy as np
 # Checkerboard parameters
 # ----------------------------
 
-CHECKERBOARD = (8, 5)       # inner corners
+CHECKERBOARD = (9, 7)       # inner corners
 SQUARE_SIZE = 0.025         # meters (25 mm)
 
 IMAGE_DIR = Path("calibration_images")

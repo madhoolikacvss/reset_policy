@@ -72,7 +72,7 @@ class ResetPolicyEnv(gym.Env):
         
         # Spaces
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(14,), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=(18,), dtype=np.float32
         )
         self.action_space = spaces.Box(
             low=-1.0, high=1.0, shape=(4,), dtype=np.float32
@@ -176,6 +176,7 @@ class ResetPolicyEnv(gym.Env):
     
     def step(self, action):
         """Execute one action step."""
+        old_coverage = self.grid.coverage()
         action = np.clip(action, -1.0, 1.0)
         self.step_count += 1
         
@@ -257,6 +258,10 @@ class ResetPolicyEnv(gym.Env):
         
         # Check termination conditions
         coverage = self.grid.coverage()
+        coverage_bonus  = 0.0
+        coverage_delta = coverage - old_coverage
+        if coverage_delta > 0:
+            coverage_bonus = coverage_delta * 10
         max_current = max(abs(float(i)) for i in observation.motor_currents)
         
         terminated = False
@@ -280,7 +285,7 @@ class ResetPolicyEnv(gym.Env):
         info = {
             "coverage": coverage,
             "visits": visits,
-            "coverage_reward": reward_info.coverage_reward,
+            "coverage_reward": reward_info.coverage_reward + coverage_bonus,
             "current_reward": reward_info.current_reward,
             "current_change_penalty": reward_info.current_change_penalty,
             "hardware_error_penalty": reward_info.hardware_error_penalty,
@@ -390,6 +395,7 @@ class ResetPolicyEnv(gym.Env):
             initial_motor_positions=np.zeros(4, dtype=np.float32),
             cube_x_norm=0.0,
             cube_y_norm=0.0,
+            target_error=np.zeros(4, dtype=np.float32),
         )
     
     def _handle_hardware_error(self, result, safety_info, source):

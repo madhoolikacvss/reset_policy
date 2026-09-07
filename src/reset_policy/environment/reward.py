@@ -38,7 +38,7 @@ class RewardFunction:
     def __init__(
         self,
         # Coverage
-        new_cell_reward: float = 1.0,      # +1 for new cell
+        new_cell_reward: float = 2.0,      # +1 for new cell
         revisit_reward: float = 0.0,       # 0 for revisited cell
         
         # Current thresholds (mA)

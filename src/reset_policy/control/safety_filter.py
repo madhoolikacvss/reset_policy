@@ -9,6 +9,7 @@ The safety filter intercepts PPO actions and modifies them to prevent:
 5. Overloading already-stressed motors
 6. Tension going too low (slack strings)
 7. Single motor overload (even if pair is balanced)
+8. Stuck motors (high current + no movement)
 
 All thresholds are from config.py for centralized management.
 """
@@ -39,6 +40,7 @@ class SafetyReason(Enum):
     TENSION_SAFETY = "tension_safety"
     TEMPERATURE_HIGH = "temperature_high"
     TEMPERATURE_CRITICAL = "temperature_critical"
+    MOTOR_STUCK = "motor_stuck"  # ADD THIS
 
 
 @dataclass
@@ -63,10 +65,7 @@ class SafetyFilter:
     """Safety filter for RL actions."""
     
     def __init__(self, motor_ids: List[int] = None, **kwargs):
-        """
-        Initialize safety filter with config values.
-        All thresholds come from config.py unless overridden via kwargs.
-        """
+        """Initialize safety filter with config values."""
         # Motor setup
         self.motor_ids = motor_ids if motor_ids is not None else config.motor.motor_ids
         self.num_motors = len(self.motor_ids)
@@ -123,6 +122,7 @@ class SafetyFilter:
         self.enable_tension_constraint = kwargs.get('enable_tension_constraint', config.safety.enable_tension_constraint)
         self.enable_temperature_safety = kwargs.get('enable_temperature_safety', config.safety.enable_temperature_safety)
         self.enable_single_motor_tension = kwargs.get('enable_single_motor_tension', config.safety.enable_single_motor_tension)
+        self.enable_stuck_motor_safety = kwargs.get('enable_stuck_motor_safety', True)  # ADD THIS
         
         # Logging
         self.log_interventions = kwargs.get('log_interventions', config.safety.log_interventions)
@@ -131,10 +131,12 @@ class SafetyFilter:
         self.intervention_count = 0
         self.intervention_reasons = {reason: 0 for reason in SafetyReason}
         self.last_result = None
+        self.prev_positions = None  # ADD THIS
         
         # Print config summary
         self._print_config()
-    
+
+
     def _print_config(self):
         """Print safety filter configuration."""
         print(f"SafetyFilter initialized:")
@@ -152,8 +154,9 @@ class SafetyFilter:
         print(f"  Features: current={self.enable_current_safety}, position={self.enable_position_safety}, "
               f"tension={self.enable_tension_safety}, voltage={self.enable_voltage_safety}, "
               f"current_aware={self.enable_current_aware_safety}, tension_constraint={self.enable_tension_constraint}, "
-              f"temperature={self.enable_temperature_safety}, single_tension={self.enable_single_motor_tension}")
-    
+              f"temperature={self.enable_temperature_safety}, single_tension={self.enable_single_motor_tension}, "
+              f"stuck_motor={self.enable_stuck_motor_safety}")
+
     def filter(self, action, currents, positions, initial_positions, 
                voltages=None, temperatures=None, action_count=0):
         """Apply safety filter to action."""
@@ -169,6 +172,18 @@ class SafetyFilter:
                 "max_current": float(np.max(np.abs(currents))) if currents is not None else 0,
             }
         )
+
+        # 1. Stuck motor safety (check first - most critical)
+        if self.enable_stuck_motor_safety and positions is not None and currents is not None:
+            action, modified, reason, detail, affected = self._apply_stuck_motor_safety(
+                action, currents, positions, self.prev_positions
+            )
+            if modified:
+                result.modified = True
+                result.reason = reason
+                result.detail = detail
+                result.affected_motors = affected
+                self._log_intervention(reason, detail, raw_action, action)
         
         # Apply each safety layer in order
         safety_layers = [
@@ -197,6 +212,9 @@ class SafetyFilter:
                     result.detail = detail
                     result.affected_motors = affected
                     self._log_intervention(reason, detail, raw_action, action)
+        
+        # Update prev_positions after all layers
+        self.prev_positions = positions.copy() if positions is not None else None  # ADD THIS
         
         # Clamp to valid range
         action = np.clip(action, -1.0, 1.0)
@@ -298,6 +316,52 @@ class SafetyFilter:
             modified = True
             detail = f"Motor {motor_id}: {voltage:.1f}V -> scale={scale:.2f}"
             affected.append(motor_id)
+        
+        return action, modified, reason, detail, affected
+      
+    def _apply_stuck_motor_safety(self, action, currents, positions, prev_positions):
+        """
+        Detect when motors are stuck and force release.
+        
+        Checks both single motors and pairs.
+        """
+        if prev_positions is None:
+            return action, False, None, "", []
+        
+        modified = False
+        reason = None
+        detail = ""
+        affected = []
+        
+        # Check each motor individually
+        for i, motor_id in enumerate(self.motor_ids):
+            pos_change = abs(positions[i] - prev_positions[i])
+            current = abs(currents[i])
+            
+            # Single motor stuck: high current + no movement
+            if current > 500 and pos_change < 5:
+                action[i] = -0.5  # Force release
+                modified = True
+                reason = SafetyReason.MOTOR_STUCK
+                detail = f"Motor {motor_id} stuck: current={current:.0f}mA, no movement"
+                affected.append(motor_id)
+        
+        # Also check pairs (both stuck)
+        for pair_indices in [self.h_idx, self.v_idx]:
+            stuck_motors = []
+            for idx in pair_indices:
+                pos_change = abs(positions[idx] - prev_positions[idx])
+                current = abs(currents[idx])
+                if current > 400 and pos_change < 5:
+                    stuck_motors.append(idx)
+            
+            if len(stuck_motors) == 2:
+                for idx in stuck_motors:
+                    action[idx] = -0.5
+                modified = True
+                reason = SafetyReason.MOTOR_STUCK
+                detail = f"Both motors in pair stuck - forcing release"
+                affected.extend([self.motor_ids[i] for i in stuck_motors])
         
         return action, modified, reason, detail, affected
     

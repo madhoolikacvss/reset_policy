@@ -36,7 +36,7 @@ class DynamixelConfig:
     
     # Control
     max_encoder_delta: int = 150       # Max ticks per action
-    max_encoder_travel: int = 10000    # Max total travel from initial
+    max_encoder_travel: int = 1000000    # Max total travel from initial
     action_duration: float = 0.8       # Seconds to wait after action
     
     # Addresses
@@ -60,7 +60,7 @@ class DynamixelConfig:
 class SafetyConfig:
     """Safety filter thresholds and settings."""
     # Current thresholds (mA)
-    max_pair_current: float = 800.0
+    max_pair_current: float = 1000.0
     max_single_current: float = 600.0
     
     # Current-aware scaling
@@ -112,7 +112,7 @@ class SafetyConfig:
 class EnvironmentConfig:
     """Environment and training settings."""
     # Episode settings
-    max_steps: int = 300
+    max_steps: int = 200
     target_coverage: float = 0.95
     
     # Current thresholds for termination
@@ -124,10 +124,10 @@ class EnvironmentConfig:
     safety_penalty_weight: float = 0.7
     
     # Board bounds (meters)
-    x_min: float = -0.95
-    x_max: float = 0
-    y_min: float = -0.94
-    y_max: float = 0.10
+    x_min: float = -0.45
+    x_max: float = -0.10
+    y_min: float = -0.74
+    y_max: float = 0.035
     
     # Grid
     cell_size_m: float = 0.01
@@ -136,7 +136,7 @@ class EnvironmentConfig:
 class TrainingConfig:
     """PPO training settings."""
     episodes: int = 1000
-    save_every: int = 5
+    save_every: int = 1
     render_every: int = 5
     min_steps_before_update: int = 50
     max_buffer_size: int = 500

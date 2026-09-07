@@ -457,16 +457,39 @@ class DynamixelExecutor:
         # Save targets before
         targets_before = {m: int(self.targets[m]) for m in self.motor_ids}
         
-        # Convert action to encoder deltas
+        # Convert action to encoder deltas with target gap reset
         encoder_deltas = {}
         targets_after = {}
+        
+        # Maximum allowed gap between target and actual position
+        MAX_ALLOWED_GAP = 500
         
         for motor, action_val in zip(self.motor_ids, action):
             action_val = np.clip(action_val, -1.0, 1.0)
             encoder_delta = int(action_val * MAX_ENCODER_DELTA)
             encoder_deltas[motor] = encoder_delta
             
-            self.targets[motor] += encoder_delta
+            # Read current position to check for target drift
+            current_pos = self.read_position(motor)
+            
+            if current_pos is not None:
+                current_target = self.targets.get(motor, current_pos)
+                gap = abs(current_target - current_pos)
+                
+                # If gap is too large, reset target to current position
+                if gap > MAX_ALLOWED_GAP:
+                    print(f"  Motor {motor}: Target gap {gap} > {MAX_ALLOWED_GAP}, resetting target {current_target} -> {current_pos}")
+                    self.targets[motor] = current_pos
+                    current_target = current_pos
+                
+                # Apply action from current target (which may have been reset)
+                self.targets[motor] = current_target + encoder_delta
+            else:
+                # Fallback: use old method if position read fails
+                print(f"  Motor {motor}: Cannot read position, using accumulated target")
+                self.targets[motor] = self.targets.get(motor, 0) + encoder_delta
+            
+            # Clamp to position limits
             lower_limit = self.initial_positions[motor] - MAX_ENCODER_TRAVEL
             upper_limit = self.initial_positions[motor] + MAX_ENCODER_TRAVEL
             self.targets[motor] = int(np.clip(self.targets[motor], lower_limit, upper_limit))
@@ -505,7 +528,6 @@ class DynamixelExecutor:
             telemetry = {m: self._get_motor_telemetry(m) for m in self.motor_ids}
         except Exception as e:
             print(f"ERROR: Could not read telemetry: {e}")
-            # Return with hardware error if we can't read telemetry
             return ExecutionResult(
                 success=False,
                 error_message=f"Could not read telemetry: {e}"

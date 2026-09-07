@@ -15,6 +15,7 @@ import numpy as np
 import time
 import sys
 from pathlib import Path
+from collections import Counter
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
@@ -26,7 +27,6 @@ from config import config
 CURRENT_LIMIT = config.dynamixel.max_encoder_travel / 5.71  # ~1750mA
 MAX_POSITION_DELTA = config.safety.max_position  # 8000 ticks
 TENSION_LIMIT = config.safety.max_pair_current * 2  # 1600mA
-
 
 @dataclass
 class Observation:
@@ -45,19 +45,25 @@ class Observation:
     cube_x_norm: float
     cube_y_norm: float
     
+    # Target error (target - actual position, 4 dims)
+    target_error: np.ndarray
+    
     # Tension metrics (mA)
     horizontal_tension: float = 0.0
     vertical_tension: float = 0.0
     total_tension: float = 0.0
     
     def as_numpy(self) -> np.ndarray:
-        """Convert observation to 14-dim numpy array."""
+        """Convert observation to 18-dim numpy array."""
         # Normalize yaw to [-1, 1]
         cube_yaw_norm = np.clip(self.cube_yaw / np.pi, -1.0, 1.0)
         
         # Normalize position deltas
         position_delta = self.motor_positions - self.initial_motor_positions
         position_delta_norm = np.clip(position_delta / MAX_POSITION_DELTA, -1.0, 1.0)
+        
+        # Normalize target error (target - actual)
+        target_error_norm = np.clip(self.target_error / 4000.0, -1.0, 1.0)
         
         # Normalize currents
         current_norm = np.clip(self.motor_currents / CURRENT_LIMIT, -1.0, 1.0)
@@ -72,6 +78,7 @@ class Observation:
             position_delta_norm.astype(np.float32),
             current_norm.astype(np.float32),
             np.array([horizontal_tension_norm, vertical_tension_norm, total_tension_norm], dtype=np.float32),
+            target_error_norm.astype(np.float32),
         ])
         
         return obs.astype(np.float32)
@@ -133,13 +140,37 @@ class ObservationBuilder:
     
     def get_observation_result(self) -> ObservationResult:
         """Get current observation with error handling."""
-        # Get cube state
-        cube_state = self.cube_tracker.get_state()
-        if not cube_state.detected:
+        # Get cube state with triple reading and majority vote
+        cube_states = []
+        for _ in range(3):
+            cube_state = self.cube_tracker.get_state()
+            if cube_state.detected:
+                cube_states.append(cube_state)
+            time.sleep(0.05)  # Small sleep between readings
+        
+        if len(cube_states) == 0:
             return ObservationResult(
                 observation=None,
                 error_message="Cube not detected"
             )
+        
+        # Majority vote for cube position
+        # Round to 3 decimal places (mm precision) for voting
+        x_values = [round(s.x, 3) for s in cube_states]
+        y_values = [round(s.y, 3) for s in cube_states]
+        
+        # Find most common x and y
+        from collections import Counter
+        x_counter = Counter(x_values)
+        y_counter = Counter(y_values)
+        
+        majority_x = x_counter.most_common(1)[0][0]
+        majority_y = y_counter.most_common(1)[0][0]
+        
+        # Use the cube state closest to majority position
+        # Find state with x and y closest to majority
+        best_state = min(cube_states, key=lambda s: abs(s.x - majority_x) + abs(s.y - majority_y))
+        cube_state = best_state
         
         # Get motor positions
         motor_positions = self.executor.read_positions()
@@ -168,15 +199,21 @@ class ObservationBuilder:
         total_tension = horizontal_tension + vertical_tension
         
         # Normalize cube position
-        cube_x_norm = float(np.clip(
-            (cube_state.x - self.x_min) / (self.x_max - self.x_min),
-            0.0, 1.0
-        ))
-        cube_y_norm = float(np.clip(
-            (cube_state.y - self.y_min) / (self.y_max - self.y_min),
-            0.0, 1.0
-        ))
-        
+        # cube_x_norm = float(np.clip(
+        #     (cube_state.x - self.x_min) / (self.x_max - self.x_min),
+        #     0.0, 1.0
+        # ))
+        # cube_y_norm = float(np.clip(
+        #     (cube_state.y - self.y_min) / (self.y_max - self.y_min),
+        #     0.0, 1.0
+        # ))
+        cube_x_norm = (cube_state.x - self.x_min) / (self.x_max - self.x_min)
+        cube_y_norm = (cube_state.y - self.y_min) / (self.y_max - self.y_min)
+        targets = np.array([self.executor.targets.get(m, 0) for m in self.executor.motor_ids])
+
+        targets = np.array([self.executor.targets.get(m, 0) for m in self.executor.motor_ids])
+        target_error = targets - motor_positions
+
         observation = Observation(
             cube_x=cube_state.x,
             cube_y=cube_state.y,
@@ -189,6 +226,7 @@ class ObservationBuilder:
             horizontal_tension=float(horizontal_tension),
             vertical_tension=float(vertical_tension),
             total_tension=float(total_tension),
+            target_error=target_error, 
         )
         
         return ObservationResult(observation=observation)

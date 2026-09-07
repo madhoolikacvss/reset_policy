@@ -1,0 +1,5 @@
+timestamp,action_count,motor_id,target_position,present_position,present_current_mA,present_voltage_V,temperature_C,torque_enabled,present_pwm,present_velocity,hardware_error_status,hardware_error_hex,packet_error,packet_error_hex,hardware_error_decoded
+2026-08-27T11:18:43.409750,0,16,4862,4862,0,5.2,36,1,0,0,0,0x00,,None,No hardware error
+2026-08-27T11:18:43.553835,0,17,1943,1943,0,5.2,37,1,0,1,0,0x00,,None,No hardware error
+2026-08-27T11:18:43.697785,0,18,5630,5630,0,5.2,25,1,0,0,0,0x00,,None,No hardware error
+2026-08-27T11:18:43.841805,0,19,-1405,-1405,0,5.300000000000001,30,1,0,0,0,0x00,,None,No hardware error

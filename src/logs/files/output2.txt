@@ -1,0 +1,29 @@
+nohup: ignoring input
+Logging to: /home/madhoolika/workspace/reset_policy/src/logs
+Board bounds: x=[-0.950, 0.000], y=[-0.940, 0.100] m
+Cell size: 0.010 m
+Initializing camera...
+Initializing AprilTag tracker...
+Dynamixel connected
+Motor 16: 1200, [TxRxResult] Communication success!, [RxPacketError] Hardware error occurred. Check the error at Control Table (Hardware Error Status)!
+Motor 17: 1200, [TxRxResult] Communication success!, 
+Motor 18: 1240, [TxRxResult] Communication success!, 
+Motor 19: 1200, [TxRxResult] Communication success!, 
+Initializing Dynamixels...
+
+Training stopped with error: RuntimeError: Motor 16: [RxPacketError] Hardware error occurred. Check the error at Control Table (Hardware Error Status)!
+
+=== CLEANUP START ===
+=== CLEANUP COMPLETE ===
+Traceback (most recent call last):
+  File "main.py", line 223, in <module>
+    main()
+  File "main.py", line 177, in main
+    env, cameras, executor, port = create_environment()
+  File "main.py", line 111, in create_environment
+    executor.initialize()
+  File "/home/madhoolika/workspace/reset_policy/src/reset_policy/control/dynamixel_executor.py", line 376, in initialize
+    self.write1(motor, ADDR_TORQUE_ENABLE, TORQUE_DISABLE)
+  File "/home/madhoolika/workspace/reset_policy/src/reset_policy/control/dynamixel_executor.py", line 312, in write1
+    raise RuntimeError(f"Motor {motor_id}: {self.packet.getRxPacketError(error)}")
+RuntimeError: Motor 16: [RxPacketError] Hardware error occurred. Check the error at Control Table (Hardware Error Status)!

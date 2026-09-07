@@ -1,0 +1,2 @@
+episode,total_reward,coverage,steps,termination_reason,terminated,truncated,coverage_reward_sum,current_reward_sum,current_change_penalty_sum,hardware_error_penalty_sum,tension_penalty_sum,safety_penalty_sum,max_current,safety_interventions,hardware_error,hardware_error_ids
+1,-17.795377646890653,0.004554655870445344,200,max_steps,False,True,35.0,13.599999999999977,-1.2693142857142867,0.0,-28.47409090909091,-36.65197245208546,748.0,157,False,
