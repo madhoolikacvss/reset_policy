@@ -1,6 +1,8 @@
 """
 Reset Policy Environment for 4-motor cube control system.
 
+Goal-Conditioned: Policy learns to move cube to a target position.
+
 Coordinate System:
 - Y-axis: horizontal (left/right)
 - X-axis: vertical (up/down)
@@ -9,11 +11,6 @@ Motor Mapping:
 - Motors 16, 17: horizontal pair (Y-axis)
 - Motors 18, 19: vertical pair (X-axis)
 - Action: +1 = pull (shorten string), -1 = release (lengthen string)
-
-Error Handling Philosophy:
-- Hardware errors are FATAL - no recovery is possible
-- When hardware error occurs, terminate episode with penalty
-- Reset should raise error if hardware error persists
 """
 
 from __future__ import annotations
@@ -25,9 +22,7 @@ from gymnasium import spaces
 
 import sys
 from pathlib import Path
-sys.path.append(
-    str(Path(__file__).resolve().parent.parent)
-)
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from reset_policy.control.safety_filter import SafetyFilter
 from reset_policy.environment.observation import ObservationBuilder
@@ -38,7 +33,7 @@ from reset_policy.config import config
 
 
 class ResetPolicyEnv(gym.Env):
-    """Gymnasium environment for cube control with safety filtering."""
+    """Gymnasium environment for goal-conditioned cube control."""
     
     metadata = {"render_modes": ["human", "rgb_array"]}
     
@@ -63,16 +58,19 @@ class ResetPolicyEnv(gym.Env):
         self.reward_fn = reward_function
         self.safety_filter = safety_filter
         
-        # Configuration (from config.py, overridable via kwargs)
+        # Configuration
         self.max_steps = kwargs.get('max_steps', config.environment.max_steps)
-        self.target_coverage = kwargs.get('target_coverage', config.environment.target_coverage)
         self.action_duration = kwargs.get('action_duration', config.dynamixel.action_duration)
         self.safety_penalty_weight = kwargs.get('safety_penalty_weight', config.environment.safety_penalty_weight)
         self.high_current_threshold = kwargs.get('high_current_threshold', config.environment.high_current_threshold)
         
-        # Spaces
+        # Goal-related config
+        self.goal_success_threshold = kwargs.get('goal_success_threshold', 0.03)  # 3 cm
+        self.goal_margin = kwargs.get('goal_margin', 0.05)  # 5 cm from edges
+        
+        # Spaces (20 dims: cube pos(3) + goal pos(2) + motor pos delta(4) + currents(4) + tensions(3) + target errors(4))
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(18,), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=(20,), dtype=np.float32
         )
         self.action_space = spaces.Box(
             low=-1.0, high=1.0, shape=(4,), dtype=np.float32
@@ -80,17 +78,9 @@ class ResetPolicyEnv(gym.Env):
         
         # Rendering
         self.render_mode = render_mode
-        self.renderer = None
-        # if render_mode in ("human", "rgb_array"):
-        #     self.renderer = BoardRenderer(
-        #         board_width_cm=(self.grid.x_max - self.grid.x_min) * 100,
-        #         board_height_cm=(self.grid.y_max - self.grid.y_min) * 100,
-        #         cell_size_cm=self.grid.cell_size * 100,
-        #     )
-
         self.renderer = BoardRenderer(
-            board_width_cm=(self.grid.y_max - self.grid.y_min) * 100,  # Y range = width
-            board_height_cm=(self.grid.x_max - self.grid.x_min) * 100,  # X range = height
+            board_width_cm=(self.grid.y_max - self.grid.y_min) * 100,
+            board_height_cm=(self.grid.x_max - self.grid.x_min) * 100,
             cell_size_cm=self.grid.cell_size * 100,
         )
         
@@ -101,7 +91,10 @@ class ResetPolicyEnv(gym.Env):
         self.needs_reposition = False
         self.safety_interventions_total = 0
         
-        # Hardware error tracking (fatal - no recovery)
+        # Goal position (set in reset)
+        self.goal_position = None  # (x_goal, y_goal)
+        
+        # Hardware error tracking
         self.hardware_error_occurred = False
         self.hardware_error_details = None
         
@@ -109,11 +102,21 @@ class ResetPolicyEnv(gym.Env):
         self.out_of_bound_penalty = kwargs.get('out_of_bound_penalty', -1.0)
     
     
-    # Reset
+    def sample_goal(self):
+        """Sample a random goal position within board bounds (with margin)."""
+        x_goal = np.random.uniform(
+            self.grid.x_min + self.goal_margin,
+            self.grid.x_max - self.goal_margin
+        )
+        y_goal = np.random.uniform(
+            self.grid.y_min + self.goal_margin,
+            self.grid.y_max - self.goal_margin
+        )
+        return x_goal, y_goal
     
     
     def reset(self, *, seed=None, options=None):
-        """Reset environment for new episode."""
+        """Reset environment for new episode with new goal."""
         super().reset(seed=seed)
         self.episode_count += 1
         time.sleep(3)
@@ -136,6 +139,14 @@ class ResetPolicyEnv(gym.Env):
             self.reposition_cube_to_center()
             self.needs_reposition = False
             self._sync_targets_with_actual_positions()
+        
+        # Sample new goal
+        x_goal, y_goal = self.sample_goal()
+        self.goal_position = (x_goal, y_goal)
+        print(f"Goal position: ({x_goal:.3f}, {y_goal:.3f})")
+        
+        # Pass goal to observation builder
+        self.obs_builder.set_goal(x_goal, y_goal)
         
         # Reset bookkeeping
         self.grid.reset()
@@ -171,12 +182,8 @@ class ResetPolicyEnv(gym.Env):
         return observation.as_numpy(), {}
     
     
-    # Step
-    
-    
     def step(self, action):
         """Execute one action step."""
-        old_coverage = self.grid.coverage()
         action = np.clip(action, -1.0, 1.0)
         self.step_count += 1
         
@@ -187,13 +194,11 @@ class ResetPolicyEnv(gym.Env):
         # Execute action
         execution_result = self.executor.execute(action)
         
-        # Handle hardware errors during execution
         if execution_result.hardware_error:
             return self._handle_hardware_error(
                 execution_result, safety_info, "action_execution"
             )
         
-        # Non-hardware execution failure
         if not execution_result.success:
             raise RuntimeError(execution_result.error_message)
         
@@ -203,13 +208,11 @@ class ResetPolicyEnv(gym.Env):
         # Get observation
         observation_result = self.obs_builder.get_observation_result()
         
-        # Handle hardware errors during observation
         if observation_result.hardware_error:
             return self._handle_hardware_error(
                 observation_result, safety_info, "observation"
             )
         
-        # Handle observation failure (non-hardware)
         if observation_result.observation is None:
             return self._handle_observation_failure(safety_info)
         
@@ -217,11 +220,6 @@ class ResetPolicyEnv(gym.Env):
         self.last_valid_observation = observation
         
         # Update renderer
-        # if self.renderer is not None:
-        #     cube_y_cm = (observation.cube_y - self.grid.y_min) * 100
-        #     cube_x_cm = (observation.cube_x - self.grid.x_min) * 100
-        #     self.renderer.update_step(self.step_count, cube_y_cm, cube_x_cm)
-
         if self.renderer is not None:
             cube_x_cm = (observation.cube_x - self.grid.x_min) * 100
             cube_y_cm = (observation.cube_y - self.grid.y_min) * 100
@@ -244,9 +242,16 @@ class ResetPolicyEnv(gym.Env):
         else:
             visits = self.grid.visit(x, y)
         
-        # Compute reward
+        # Calculate distance to goal
+        x_goal, y_goal = self.goal_position
+        distance_to_goal = np.sqrt((x - x_goal)**2 + (y - y_goal)**2)
+        
+        # Compute reward (goal-distance based from reward.py)
         reward_info = self.reward_fn.compute(
-            visitation_count=visits,
+            cube_x=x,
+            cube_y=y,
+            goal_x=x_goal,
+            goal_y=y_goal,
             motor_currents=observation.motor_currents,
             hardware_error=False,
         )
@@ -256,14 +261,9 @@ class ResetPolicyEnv(gym.Env):
         safety_penalty = self._compute_safety_penalty(safety_info)
         reward += safety_penalty
         
-        # Check termination conditions
-        coverage = self.grid.coverage()
-        coverage_bonus  = 0.0
-        coverage_delta = coverage - old_coverage
-        if coverage_delta > 0:
-            coverage_bonus = coverage_delta * 10
         max_current = max(abs(float(i)) for i in observation.motor_currents)
         
+        # Termination conditions
         terminated = False
         truncated = False
         termination_reason = None
@@ -274,31 +274,33 @@ class ResetPolicyEnv(gym.Env):
         elif out_of_bounds:
             terminated = True
             termination_reason = "out_of_bounds"
-        elif coverage >= self.target_coverage:
+        elif distance_to_goal < self.goal_success_threshold:
             terminated = True
-            termination_reason = "coverage"
+            termination_reason = "goal_reached"
         elif self.step_count >= self.max_steps:
             truncated = True
             termination_reason = "max_steps"
         
-        # Build info dict
+        # Info dict (updated for goal-conditioned)
         info = {
-            "coverage": coverage,
+            "distance_to_goal": distance_to_goal,
+            "goal_position": (x_goal, y_goal),
+            "cube_position": (x, y),
+            "goal_reached": distance_to_goal < self.goal_success_threshold,
+            "steps": self.step_count,
             "visits": visits,
-            "coverage_reward": reward_info.coverage_reward + coverage_bonus,
-            "current_reward": reward_info.current_reward,
+            "distance_reward": reward_info.distance_reward,
             "current_change_penalty": reward_info.current_change_penalty,
             "hardware_error_penalty": reward_info.hardware_error_penalty,
+            "tension_penalty": reward_info.tension_penalty,
             "max_current": max_current,
             "motor_currents": observation.motor_currents.copy(),
             "motor_voltages": self.executor.read_voltages() if hasattr(self.executor, 'read_voltages') else [None]*4,
             "motor_temperatures": self.executor.read_temperatures() if hasattr(self.executor, 'read_temperatures') else [None]*4,
-            "motor_currents": observation.motor_currents.copy(),
             "hardware_error": False,
             "hardware_error_ids": [],
             "hardware_error_status": {},
             "execution_success": True,
-            "cube_position": (x, y),
             "termination_reason": termination_reason,
             "out_of_bounds_penalty": out_of_bound_penalty,
             "action_modified": safety_info['modified'],
@@ -306,13 +308,29 @@ class ResetPolicyEnv(gym.Env):
             "safety_detail": safety_info['detail'],
             "safety_penalty": safety_penalty,
             "modification_magnitude": safety_info['magnitude'],
-            "tension_penalty": reward_info.tension_penalty,
         }
         
         return observation.as_numpy(), reward, terminated, truncated, info
     
     
-    # Helper methods
+    def _create_zero_observation(self):
+        """Create a zero observation for error cases."""
+        from reset_policy.environment.observation import Observation
+        return Observation(
+            cube_x=0.0,
+            cube_y=0.0,
+            cube_yaw=0.0,
+            motor_positions=np.zeros(4, dtype=np.float32),
+            motor_currents=np.zeros(4, dtype=np.float32),
+            initial_motor_positions=np.zeros(4, dtype=np.float32),
+            cube_x_norm=0.0,
+            cube_y_norm=0.0,
+            x_goal_norm=0.5,  # Center
+            y_goal_norm=0.5,
+            target_error=np.zeros(4, dtype=np.float32),
+        )
+
+     # Helper methods
     
     
     def _apply_safety_filter(self, action):
@@ -383,32 +401,8 @@ class ResetPolicyEnv(gym.Env):
         
         return penalty
     
-    def _create_zero_observation(self):
-        """Create a zero observation for error cases."""
-        from reset_policy.environment.observation import Observation
-        return Observation(
-            cube_x=0.0,
-            cube_y=0.0,
-            cube_yaw=0.0,
-            motor_positions=np.zeros(4, dtype=np.float32),
-            motor_currents=np.zeros(4, dtype=np.float32),
-            initial_motor_positions=np.zeros(4, dtype=np.float32),
-            cube_x_norm=0.0,
-            cube_y_norm=0.0,
-            target_error=np.zeros(4, dtype=np.float32),
-        )
-    
     def _handle_hardware_error(self, result, safety_info, source):
-        """
-        Handle hardware errors (FATAL - no recovery possible).
-        
-        This method:
-        1. Logs the hardware error details
-        2. Computes reward with heavy penalty
-        3. Returns terminated=True with hardware_error info
-        4. Sets flag so next reset() will raise error
-        """
-        # Record hardware error for next reset
+        """Handle hardware errors (FATAL - no recovery possible)."""
         self.hardware_error_occurred = True
         self.hardware_error_details = {
             'source': source,
@@ -431,9 +425,18 @@ class ResetPolicyEnv(gym.Env):
             print("WARNING: No valid observation available, using zeros")
             observation = self._create_zero_observation()
         
+        # Get goal position (or use current as fallback)
+        if self.goal_position is not None:
+            x_goal, y_goal = self.goal_position
+        else:
+            x_goal, y_goal = observation.cube_x, observation.cube_y
+        
         # Compute reward with hardware error penalty
         reward_info = self.reward_fn.compute(
-            visitation_count=0,
+            cube_x=observation.cube_x,
+            cube_y=observation.cube_y,
+            goal_x=x_goal,
+            goal_y=y_goal,
             motor_currents=observation.motor_currents,
             hardware_error=True,
         )
@@ -448,8 +451,16 @@ class ResetPolicyEnv(gym.Env):
             print(f"  [SAFETY PENALTY ON HARDWARE ERROR] {safety_penalty:.2f}")
         
         info = {
-            "coverage": self.grid.coverage(),
-            "visits": 0,
+            "distance_to_goal": np.sqrt((observation.cube_x - x_goal)**2 + (observation.cube_y - y_goal)**2),
+            "goal_position": (x_goal, y_goal),
+            "cube_position": (observation.cube_x, observation.cube_y),
+            "goal_reached": False,
+            "distance_reward": reward_info.distance_reward,
+            "current_change_penalty": reward_info.current_change_penalty,
+            "hardware_error_penalty": reward_info.hardware_error_penalty,
+            "tension_penalty": reward_info.tension_penalty,
+            "max_current": max(abs(float(i)) for i in observation.motor_currents),
+            "motor_currents": observation.motor_currents.copy(),
             "hardware_error": True,
             "hardware_error_ids": result.hardware_error_ids,
             "hardware_error_status": result.hardware_error_status,
@@ -461,16 +472,12 @@ class ResetPolicyEnv(gym.Env):
             "safety_detail": safety_info['detail'],
             "safety_penalty": safety_penalty,
             "modification_magnitude": safety_info['magnitude'],
-            "tension_penalty": reward_info.tension_penalty,
         }
         
         return observation.as_numpy(), reward, True, False, info
     
     def _handle_observation_failure(self, safety_info):
-        """
-        Handle observation failures (non-hardware).
-        This could be AprilTag detection failure or communication issue.
-        """
+        """Handle observation failures (non-hardware)."""
         print("WARNING: Observation result is None (non-hardware failure)")
         
         observation = self.last_valid_observation
@@ -478,33 +485,42 @@ class ResetPolicyEnv(gym.Env):
             print("WARNING: No valid observation available, using zeros")
             observation = self._create_zero_observation()
         
+        # Get goal position (or use current as fallback)
+        if self.goal_position is not None:
+            x_goal, y_goal = self.goal_position
+        else:
+            x_goal, y_goal = observation.cube_x, observation.cube_y
+        
         reward_info = self.reward_fn.compute(
-            visitation_count=0,
+            cube_x=observation.cube_x,
+            cube_y=observation.cube_y,
+            goal_x=x_goal,
+            goal_y=y_goal,
             motor_currents=observation.motor_currents,
             hardware_error=False,
         )
         
         info = {
-            "coverage": self.grid.coverage(),
-            "visits": 0,
-            "coverage_reward": 0.0,
-            "current_reward": reward_info.current_reward,
+            "distance_to_goal": np.sqrt((observation.cube_x - x_goal)**2 + (observation.cube_y - y_goal)**2),
+            "goal_position": (x_goal, y_goal),
+            "cube_position": (observation.cube_x, observation.cube_y),
+            "goal_reached": False,
+            "distance_reward": reward_info.distance_reward,
             "current_change_penalty": reward_info.current_change_penalty,
             "hardware_error_penalty": reward_info.hardware_error_penalty,
-            "max_current": 0.0,
-            "motor_currents": np.zeros(4),
+            "tension_penalty": reward_info.tension_penalty,
+            "max_current": max(abs(float(i)) for i in observation.motor_currents),
+            "motor_currents": observation.motor_currents.copy(),
             "hardware_error": False,
             "hardware_error_ids": [],
             "hardware_error_status": {},
             "execution_success": True,
-            "cube_position": (observation.cube_x, observation.cube_y),
             "termination_reason": "observation_failed",
             "action_modified": safety_info['modified'],
             "safety_reason": safety_info['reason'],
             "safety_detail": safety_info['detail'],
             "safety_penalty": 0.0,
             "modification_magnitude": safety_info['magnitude'],
-            "tension_penalty": reward_info.tension_penalty,
         }
         
         return observation.as_numpy(), reward_info.total, True, False, info

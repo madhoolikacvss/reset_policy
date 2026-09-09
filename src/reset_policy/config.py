@@ -102,8 +102,8 @@ class SafetyConfig:
     enable_current_aware_safety: bool = True
     enable_tension_constraint: bool = True
     enable_temperature_safety: bool = True
-    enable_single_motor_tension: bool = False  # Disabled initially - too aggressive
-    # enable_stuck_motor_safety: bool = False     # Not implemented yet
+    enable_single_motor_tension: bool = False
+    enable_stuck_motor_safety: bool = True  # Uncommented
     
     # Logging
     log_interventions: bool = True
@@ -113,15 +113,19 @@ class EnvironmentConfig:
     """Environment and training settings."""
     # Episode settings
     max_steps: int = 200
-    target_coverage: float = 0.95
+    
+    # Goal settings
+    goal_success_threshold: float = 0.03  # 3 cm - success when within this distance
+    goal_margin: float = 0.1  # 10 cm - keep goals away from edges
     
     # Current thresholds for termination
-    safe_current_threshold: float = 500.0
-    moderate_current_threshold: float = 1800.0
     high_current_threshold: float = 2500.0
     
     # Safety penalty
     safety_penalty_weight: float = 0.7
+    
+    # Out of bounds penalty
+    out_of_bound_penalty: float = -1.0
     
     # Board bounds (meters)
     x_min: float = -0.45

@@ -145,7 +145,6 @@ def create_environment():
         safety_filter=safety_filter,
         render_mode="human",
         max_steps=config.environment.max_steps,
-        target_coverage=config.environment.target_coverage,
         high_current_threshold=config.environment.high_current_threshold,
         safety_penalty_weight=config.environment.safety_penalty_weight,
     )

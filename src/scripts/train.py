@@ -84,8 +84,7 @@ def train(env, config=config):
         
         # Episode stats
         episode_stats = {
-            'coverage_reward': 0.0,
-            'current_reward': 0.0,
+            'distance_reward': 0.0,
             'current_change_penalty': 0.0,
             'hardware_error_penalty': 0.0,
             'tension_penalty': 0.0,
@@ -93,7 +92,7 @@ def train(env, config=config):
             'max_current': 0.0,
             'safety_interventions': 0,
             'hardware_error_ids': set(),
-            'safety_reasons': {},  
+            'safety_reasons': {},
             'safety_penalty_by_reason': {},
         }
         
@@ -161,8 +160,7 @@ def train(env, config=config):
             steps_since_update += 1
             
             # Update stats
-            episode_stats['coverage_reward'] += float(info.get("coverage_reward", 0.0))
-            episode_stats['current_reward'] += float(info.get("current_reward", 0.0))
+            episode_stats['distance_reward'] += float(info.get("distance_reward", 0.0))
             episode_stats['current_change_penalty'] += float(info.get("current_change_penalty", 0.0))
             episode_stats['hardware_error_penalty'] += float(info.get("hardware_error_penalty", 0.0))
             episode_stats['tension_penalty'] += float(info.get("tension_penalty", 0.0))
@@ -215,9 +213,11 @@ def train(env, config=config):
             print(f"Episode {episode + 1:4d} | SKIP UPDATE | Steps: {steps:3d} | "
                   f"Buffer: {buffer_size} | Reason: {info.get('termination_reason', 'unknown')}")
         
+        
         # Console output
         print(f"Episode {episode + 1:4d} | Reward: {episode_reward:8.3f} | "
-              f"Coverage: {info.get('coverage', 0.0):.2f} | Steps: {steps:3d} | "
+              f"Steps: {steps:3d} | "
+              f"Dist: {info.get('distance_to_goal', 0.0):.3f} | "
               f"Max current: {episode_stats['max_current']:.1f}mA | "
               f"Safety: {episode_stats['safety_interventions']} | "
               f"Reason: {info.get('termination_reason', 'unknown')}")

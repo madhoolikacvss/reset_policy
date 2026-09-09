@@ -1,11 +1,12 @@
-# reset_policy/environment/observation.py (cleaned)
 """
 Observation builder for the reset policy environment.
-14-dimensional observation space:
+20-dimensional observation space:
   [0-2]:   Cube position (normalized x, y, yaw)
-  [3-6]:   Motor position deltas (normalized)
-  [7-10]:  Motor currents (normalized)
-  [11-13]: Tension metrics (horizontal, vertical, total)
+  [3-4]:   Goal position (normalized x, y)
+  [5-8]:   Motor position deltas (normalized)
+  [9-12]:  Motor currents (normalized)
+  [13-15]: Tension metrics (horizontal, vertical, total)
+  [16-19]: Target errors (target - actual, 4 dims)
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ CURRENT_LIMIT = config.dynamixel.max_encoder_travel / 5.71  # ~1750mA
 MAX_POSITION_DELTA = config.safety.max_position  # 8000 ticks
 TENSION_LIMIT = config.safety.max_pair_current * 2  # 1600mA
 
+
 @dataclass
 class Observation:
     """Single observation of the system state."""
@@ -44,6 +46,10 @@ class Observation:
     # Normalized cube position
     cube_x_norm: float
     cube_y_norm: float
+
+    # Normalized goal position
+    x_goal_norm: float  # Renamed for clarity
+    y_goal_norm: float
     
     # Target error (target - actual position, 4 dims)
     target_error: np.ndarray
@@ -54,7 +60,7 @@ class Observation:
     total_tension: float = 0.0
     
     def as_numpy(self) -> np.ndarray:
-        """Convert observation to 18-dim numpy array."""
+        """Convert observation to 20-dim numpy array."""
         # Normalize yaw to [-1, 1]
         cube_yaw_norm = np.clip(self.cube_yaw / np.pi, -1.0, 1.0)
         
@@ -62,7 +68,7 @@ class Observation:
         position_delta = self.motor_positions - self.initial_motor_positions
         position_delta_norm = np.clip(position_delta / MAX_POSITION_DELTA, -1.0, 1.0)
         
-        # Normalize target error (target - actual)
+        # Normalize target error
         target_error_norm = np.clip(self.target_error / 4000.0, -1.0, 1.0)
         
         # Normalize currents
@@ -75,6 +81,7 @@ class Observation:
         
         obs = np.concatenate([
             np.array([self.cube_x_norm, self.cube_y_norm, cube_yaw_norm], dtype=np.float32),
+            np.array([self.x_goal_norm, self.y_goal_norm], dtype=np.float32),
             position_delta_norm.astype(np.float32),
             current_norm.astype(np.float32),
             np.array([horizontal_tension_norm, vertical_tension_norm, total_tension_norm], dtype=np.float32),
@@ -119,6 +126,13 @@ class ObservationBuilder:
         self.y_min = y_min
         self.y_max = y_max
         self.initial_motor_positions = None
+        self.x_goal = None  # Current goal (meters)
+        self.y_goal = None
+    
+    def set_goal(self, x_goal: float, y_goal: float):
+        """Set the current goal position."""
+        self.x_goal = x_goal
+        self.y_goal = y_goal
     
     def reset(self, max_retries: int = 5, retry_delay: float = 0.2):
         """Reset initial motor positions with retries."""
@@ -146,7 +160,7 @@ class ObservationBuilder:
             cube_state = self.cube_tracker.get_state()
             if cube_state.detected:
                 cube_states.append(cube_state)
-            time.sleep(0.05)  # Small sleep between readings
+            time.sleep(0.05)
         
         if len(cube_states) == 0:
             return ObservationResult(
@@ -155,20 +169,15 @@ class ObservationBuilder:
             )
         
         # Majority vote for cube position
-        # Round to 3 decimal places (mm precision) for voting
         x_values = [round(s.x, 3) for s in cube_states]
         y_values = [round(s.y, 3) for s in cube_states]
         
-        # Find most common x and y
-        from collections import Counter
         x_counter = Counter(x_values)
         y_counter = Counter(y_values)
         
         majority_x = x_counter.most_common(1)[0][0]
         majority_y = y_counter.most_common(1)[0][0]
         
-        # Use the cube state closest to majority position
-        # Find state with x and y closest to majority
         best_state = min(cube_states, key=lambda s: abs(s.x - majority_x) + abs(s.y - majority_y))
         cube_state = best_state
         
@@ -190,7 +199,7 @@ class ObservationBuilder:
         motor_positions = np.asarray(motor_positions, dtype=np.float32)
         motor_currents = np.asarray(motor_currents, dtype=np.float32)
         
-        # Calculate tension using correct motor pairs
+        # Calculate tension
         h_idx = config.get_motor_indices(self.executor.motor_ids)['horizontal']
         v_idx = config.get_motor_indices(self.executor.motor_ids)['vertical']
         
@@ -198,22 +207,23 @@ class ObservationBuilder:
         vertical_tension = abs(motor_currents[v_idx[0]]) + abs(motor_currents[v_idx[1]])
         total_tension = horizontal_tension + vertical_tension
         
-        # Normalize cube position
-        # cube_x_norm = float(np.clip(
-        #     (cube_state.x - self.x_min) / (self.x_max - self.x_min),
-        #     0.0, 1.0
-        # ))
-        # cube_y_norm = float(np.clip(
-        #     (cube_state.y - self.y_min) / (self.y_max - self.y_min),
-        #     0.0, 1.0
-        # ))
+        # Normalize cube position (unbounded)
         cube_x_norm = (cube_state.x - self.x_min) / (self.x_max - self.x_min)
         cube_y_norm = (cube_state.y - self.y_min) / (self.y_max - self.y_min)
-        targets = np.array([self.executor.targets.get(m, 0) for m in self.executor.motor_ids])
-
+        
+        # Normalize goal position
+        if self.x_goal is not None and self.y_goal is not None:
+            x_goal_norm = (self.x_goal - self.x_min) / (self.x_max - self.x_min)
+            y_goal_norm = (self.y_goal - self.y_min) / (self.y_max - self.y_min)
+        else:
+            # Default to center if no goal set
+            x_goal_norm = 0.5
+            y_goal_norm = 0.5
+        
+        # Target error
         targets = np.array([self.executor.targets.get(m, 0) for m in self.executor.motor_ids])
         target_error = targets - motor_positions
-
+        
         observation = Observation(
             cube_x=cube_state.x,
             cube_y=cube_state.y,
@@ -223,10 +233,12 @@ class ObservationBuilder:
             initial_motor_positions=self.initial_motor_positions.copy(),
             cube_x_norm=cube_x_norm,
             cube_y_norm=cube_y_norm,
+            x_goal_norm=x_goal_norm,
+            y_goal_norm=y_goal_norm,
             horizontal_tension=float(horizontal_tension),
             vertical_tension=float(vertical_tension),
             total_tension=float(total_tension),
-            target_error=target_error, 
+            target_error=target_error,
         )
         
         return ObservationResult(observation=observation)

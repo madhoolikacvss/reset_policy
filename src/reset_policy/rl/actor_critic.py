@@ -7,7 +7,7 @@ class ActorCritic(nn.Module):
 
     def __init__(
         self,
-        observation_dim=18,
+        observation_dim=20,
         action_dim=4,
         hidden_dim=128,
     ):

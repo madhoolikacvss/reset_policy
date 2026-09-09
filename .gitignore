@@ -1,7 +1,10 @@
 __pycache__/
 *.pyc
 
-output.txt
+# Ignore Python cache directories and bytecode
+**/__pycache__/
+*.pyc
+**/__pycache__
 
 experiments/checkpoints/
 experiments/videos/

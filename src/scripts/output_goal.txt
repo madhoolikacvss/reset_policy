@@ -1,0 +1,1395 @@
+nohup: ignoring input
+Logging to: /home/madhoolika/workspace/reset_policy/src/logs
+Board bounds: x=[-0.450, -0.100], y=[-0.740, 0.035] m
+Cell size: 0.010 m
+Initializing camera...
+Initializing AprilTag tracker...
+Dynamixel connected
+Motor 16: 1200, [TxRxResult] Communication success!, 
+Motor 17: 1200, [TxRxResult] Communication success!, 
+Motor 18: 1240, [TxRxResult] Communication success!, 
+Motor 19: 1200, [TxRxResult] Communication success!, 
+Initializing Dynamixels...
+Motor 16: initial position = 403
+Motor 17: initial position = 1487
+Motor 18: initial position = 3774
+Motor 19: initial position = 1383
+Initialization complete.
+SafetyFilter initialized:
+  Motors: [16, 17, 18, 19]
+  Horizontal pair: [16, 17]
+  Vertical pair: [18, 19]
+  Max pair current: 1000.0 mA
+  Max single current: 600.0 mA
+  Max position: 8000.0
+  Voltage: 3.5-4.0 V
+  Temperature: 45.0°C (critical: 55.0°C)
+  Current load: 400.0mA heavy, 700.0mA critical
+  Min tension: 30.0 mA
+  Single motor tension: 300.0mA (high: 500.0, critical: 700.0)
+  Features: current=True, position=True, tension=True, voltage=True, current_aware=True, tension_constraint=True, temperature=True, single_tension=False, stuck_motor=True
+Renderer: Headless mode (saving to /home/madhoolika/workspace/reset_policy/src/logs/renderings)
+  Save every 5 episodes
+  Board: 77.5x35.0 cm
+
+Environment initialized successfully
+Training on cuda
+Logging to: /home/madhoolika/workspace/reset_policy/src/logs
+
+================ ENV RESET ================
+Goal position: (-0.292, -0.636)
+Waiting for motors to settle before reading positions...
+------ in april tag -------
+x:  -0.2361095836114796
+y:  -0.388350682866087
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.2361095836114796
+y:  -0.388350682866087
+------ in april tag -------
+x:  -0.23594053996977646
+y:  -0.3881407289264803
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.23594053996977646
+y:  -0.3881407289264803
+------ in april tag -------
+x:  -0.23593139826910592
+y:  -0.3879556522691658
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.23593139826910592
+y:  -0.3879556522691658
+
+[SAFETY INTERVENTION #1]
+  Reason: tension_too_low
+  Detail: Pair [18, 19] tension 0mA < 30.0mA
+  Raw action: [-0.82034093  0.4328915  -0.9474039  -0.916861  ]
+  Safe action: [-0.82034093  0.4328915  -0.18948078 -0.1833722 ]
+  Modification: [0.        0.        0.7579231 0.7334888]
+
+============================================================
+RL ACTION #1
+raw action: [-0.82034093  0.4328915  -0.18948078 -0.1833722 ]
+============================================================
+  Motor 16: action=-0.82034 delta=-123 target=403 -> 280
+  Motor 17: action=+0.43289 delta=+64 target=1487 -> 1551
+  Motor 18: action=-0.18948 delta=-28 target=3774 -> 3746
+  Motor 19: action=-0.18337 delta=-27 target=1383 -> 1356
+
+ACTION #1 TELEMETRY
+  Motor 16: pos=335 target=280 current=-11mA voltage=5.2V temp=23°C PWM=-5 velocity=-11 HW=0
+  Motor 17: pos=1542 target=1551 current=12mA voltage=5.2V temp=22°C PWM=10 velocity=1 HW=0
+  Motor 18: pos=3747 target=3746 current=-9mA voltage=5.2V temp=22°C PWM=0 velocity=1 HW=0
+  Motor 19: pos=1355 target=1356 current=13mA voltage=5.2V temp=22°C PWM=1 velocity=0 HW=0
+  ACTION #1 SUCCESS
+------ in april tag -------
+x:  -0.26931337549938605
+y:  -0.3632084414000574
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.26931337549938605
+y:  -0.3632084414000574
+------ in april tag -------
+x:  -0.2694711747832101
+y:  -0.3630685485411193
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.2694711747832101
+y:  -0.3630685485411193
+------ in april tag -------
+x:  -0.26918510636994275
+y:  -0.363030946663882
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.26918510636994275
+y:  -0.363030946663882
+  [SAFETY PENALTY] -0.31 (reason: tension_too_low, magnitude: 0.373)
+
+============================================================
+RL ACTION #2
+raw action: [ 0.9715824  -0.96873116  0.6911777  -0.98657596]
+============================================================
+  Motor 16: action=+0.97158 delta=+145 target=280 -> 425
+  Motor 17: action=-0.96873 delta=-145 target=1551 -> 1406
+  Motor 18: action=+0.69118 delta=+103 target=3746 -> 3849
+  Motor 19: action=-0.98658 delta=-147 target=1356 -> 1209
+
+ACTION #2 TELEMETRY
+  Motor 16: pos=362 target=425 current=11mA voltage=5.2V temp=23°C PWM=7 velocity=15 HW=0
+  Motor 17: pos=1405 target=1406 current=10mA voltage=5.2V temp=22°C PWM=0 velocity=1 HW=0
+  Motor 18: pos=3850 target=3849 current=2mA voltage=5.2V temp=22°C PWM=0 velocity=1 HW=0
+  Motor 19: pos=1209 target=1209 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=1 HW=0
+  ACTION #2 SUCCESS
+------ in april tag -------
+x:  -0.19999488032552745
+y:  -0.40813475637501256
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19999488032552745
+y:  -0.40813475637501256
+------ in april tag -------
+x:  -0.20037337119465568
+y:  -0.4086073701843452
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.20037337119465568
+y:  -0.4086073701843452
+------ in april tag -------
+x:  -0.19953347086680992
+y:  -0.4085684969609794
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19953347086680992
+y:  -0.4085684969609794
+
+[SAFETY INTERVENTION #2]
+  Reason: tension_too_low
+  Detail: Pair [18, 19] tension 0mA < 30.0mA
+  Raw action: [ 0.22404428  0.465286   -0.6387843  -0.0039725 ]
+  Safe action: [ 0.22404428  0.465286   -0.12775686 -0.0007945 ]
+  Modification: [0.         0.         0.51102746 0.003178  ]
+
+============================================================
+RL ACTION #3
+raw action: [ 0.22404428  0.465286   -0.12775686 -0.0007945 ]
+============================================================
+  Motor 16: action=+0.22404 delta=+33 target=425 -> 458
+  Motor 17: action=+0.46529 delta=+69 target=1406 -> 1475
+  Motor 18: action=-0.12776 delta=-19 target=3849 -> 3830
+  Motor 19: action=-0.00079 delta=+0 target=1209 -> 1209
+
+ACTION #3 TELEMETRY
+  Motor 16: pos=444 target=458 current=15mA voltage=5.2V temp=23°C PWM=17 velocity=1 HW=0
+  Motor 17: pos=1454 target=1475 current=16mA voltage=5.2V temp=22°C PWM=32 velocity=1 HW=0
+  Motor 18: pos=3830 target=3830 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=0 HW=0
+  Motor 19: pos=1209 target=1209 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=1 HW=0
+  ACTION #3 SUCCESS
+------ in april tag -------
+x:  -0.20026501542141048
+y:  -0.408110570601843
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.20026501542141048
+y:  -0.408110570601843
+------ in april tag -------
+x:  -0.2002925146979412
+y:  -0.4080267639027417
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.2002925146979412
+y:  -0.4080267639027417
+------ in april tag -------
+x:  -0.20085518778447228
+y:  -0.40798229054602375
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.20085518778447228
+y:  -0.40798229054602375
+  [SAFETY PENALTY] -0.11 (reason: tension_too_low, magnitude: 0.129)
+
+[SAFETY INTERVENTION #3]
+  Reason: tension_too_low
+  Detail: Pair [18, 19] tension 0mA < 30.0mA
+  Raw action: [ 0.90207374  0.9428992  -0.29291275 -0.67508316]
+  Safe action: [ 0.90207374  0.9428992  -0.05858255 -0.13501664]
+  Modification: [0.         0.         0.2343302  0.54006654]
+
+============================================================
+RL ACTION #4
+raw action: [ 0.90207374  0.9428992  -0.05858255 -0.13501664]
+============================================================
+  Motor 16: action=+0.90207 delta=+135 target=458 -> 593
+  Motor 17: action=+0.94290 delta=+141 target=1475 -> 1616
+  Motor 18: action=-0.05858 delta=-8 target=3830 -> 3822
+  Motor 19: action=-0.13502 delta=-20 target=1209 -> 1189
+
+ACTION #4 TELEMETRY
+  Motor 16: pos=495 target=593 current=74mA voltage=5.1000000000000005V temp=23°C PWM=146 velocity=0 HW=0
+  Motor 17: pos=1505 target=1616 current=90mA voltage=5.1000000000000005V temp=22°C PWM=175 velocity=1 HW=0
+  Motor 18: pos=3822 target=3822 current=0mA voltage=5.0V temp=22°C PWM=0 velocity=0 HW=0
+  Motor 19: pos=1189 target=1189 current=0mA voltage=5.0V temp=22°C PWM=0 velocity=0 HW=0
+  ACTION #4 SUCCESS
+------ in april tag -------
+x:  -0.19618841340094784
+y:  -0.4092960829769369
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19618841340094784
+y:  -0.4092960829769369
+------ in april tag -------
+x:  -0.19642495262610282
+y:  -0.4096636110994435
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19642495262610282
+y:  -0.4096636110994435
+------ in april tag -------
+x:  -0.19616010280194165
+y:  -0.4095794462835747
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19616010280194165
+y:  -0.4095794462835747
+  [SAFETY PENALTY] -0.16 (reason: tension_too_low, magnitude: 0.194)
+
+[SAFETY INTERVENTION #4]
+  Reason: tension_too_low
+  Detail: Pair [18, 19] tension 0mA < 30.0mA
+  Raw action: [ 0.42409855  0.04581077 -0.39537427 -0.4006578 ]
+  Safe action: [ 0.42409855  0.04581077 -0.07907485 -0.08013156]
+  Modification: [0.         0.         0.3162994  0.32052624]
+
+============================================================
+RL ACTION #5
+raw action: [ 0.42409855  0.04581077 -0.07907485 -0.08013156]
+============================================================
+  Motor 16: action=+0.42410 delta=+63 target=593 -> 656
+  Motor 17: action=+0.04581 delta=+6 target=1616 -> 1622
+  Motor 18: action=-0.07907 delta=-11 target=3822 -> 3811
+  Motor 19: action=-0.08013 delta=-12 target=1189 -> 1177
+
+ACTION #5 TELEMETRY
+  Motor 16: pos=516 target=656 current=124mA voltage=5.0V temp=23°C PWM=210 velocity=0 HW=0
+  Motor 17: pos=1505 target=1622 current=95mA voltage=5.1000000000000005V temp=22°C PWM=184 velocity=0 HW=0
+  Motor 18: pos=3811 target=3811 current=0mA voltage=5.1000000000000005V temp=22°C PWM=0 velocity=1 HW=0
+  Motor 19: pos=1177 target=1177 current=0mA voltage=4.9V temp=22°C PWM=0 velocity=0 HW=0
+  ACTION #5 SUCCESS
+------ in april tag -------
+x:  -0.19591732241639775
+y:  -0.4094095085046524
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19591732241639775
+y:  -0.4094095085046524
+------ in april tag -------
+x:  -0.19567892036468862
+y:  -0.40947184593723207
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19567892036468862
+y:  -0.40947184593723207
+------ in april tag -------
+x:  -0.19581611295638446
+y:  -0.40874723572586324
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19581611295638446
+y:  -0.40874723572586324
+  [SAFETY PENALTY] -0.13 (reason: tension_too_low, magnitude: 0.159)
+
+============================================================
+RL ACTION #6
+raw action: [0.5014669  0.11985303 0.85082054 0.28507802]
+============================================================
+  Motor 16: action=+0.50147 delta=+75 target=656 -> 731
+  Motor 17: action=+0.11985 delta=+17 target=1622 -> 1639
+  Motor 18: action=+0.85082 delta=+127 target=3811 -> 3938
+  Motor 19: action=+0.28508 delta=+42 target=1177 -> 1219
+
+ACTION #6 TELEMETRY
+  Motor 16: pos=545 target=731 current=186mA voltage=4.800000000000001V temp=23°C PWM=276 velocity=1 HW=0
+  Motor 17: pos=1503 target=1639 current=120mA voltage=5.1000000000000005V temp=22°C PWM=214 velocity=0 HW=0
+  Motor 18: pos=3939 target=3938 current=5mA voltage=5.1000000000000005V temp=22°C PWM=0 velocity=1 HW=0
+  Motor 19: pos=1218 target=1219 current=15mA voltage=5.0V temp=22°C PWM=1 velocity=1 HW=0
+  ACTION #6 SUCCESS
+------ in april tag -------
+x:  -0.19591082729414197
+y:  -0.4104535931935562
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19591082729414197
+y:  -0.4104535931935562
+------ in april tag -------
+x:  -0.19561783611621156
+y:  -0.4104418207113517
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19561783611621156
+y:  -0.4104418207113517
+------ in april tag -------
+x:  -0.19565824042743615
+y:  -0.4103983681607771
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19565824042743615
+y:  -0.4103983681607771
+
+============================================================
+RL ACTION #7
+raw action: [-0.86238915  0.5606624  -0.5692687   0.93677056]
+============================================================
+  Motor 16: action=-0.86239 delta=-129 target=731 -> 602
+  Motor 17: action=+0.56066 delta=+84 target=1639 -> 1723
+  Motor 18: action=-0.56927 delta=-85 target=3938 -> 3853
+  Motor 19: action=+0.93677 delta=+140 target=1219 -> 1359
+
+ACTION #7 TELEMETRY
+  Motor 16: pos=552 target=602 current=33mA voltage=5.2V temp=24°C PWM=78 velocity=0 HW=0
+  Motor 17: pos=1504 target=1723 current=264mA voltage=4.9V temp=22°C PWM=343 velocity=1 HW=0
+  Motor 18: pos=3854 target=3853 current=0mA voltage=4.7V temp=22°C PWM=0 velocity=0 HW=0
+  Motor 19: pos=1354 target=1359 current=15mA voltage=5.1000000000000005V temp=22°C PWM=7 velocity=1 HW=0
+  ACTION #7 SUCCESS
+------ in april tag -------
+x:  -0.2027286156205465
+y:  -0.4087219149117622
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.2027286156205465
+y:  -0.4087219149117622
+------ in april tag -------
+x:  -0.20361475922713748
+y:  -0.4085552414295363
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.20361475922713748
+y:  -0.4085552414295363
+------ in april tag -------
+x:  -0.2030096605710765
+y:  -0.4090266406286334
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.2030096605710765
+y:  -0.4090266406286334
+
+============================================================
+RL ACTION #8
+raw action: [-0.12311647 -0.63241553 -0.5343751   0.06408479]
+============================================================
+  Motor 16: action=-0.12312 delta=-18 target=602 -> 584
+  Motor 17: action=-0.63242 delta=-94 target=1723 -> 1629
+  Motor 18: action=-0.53438 delta=-80 target=3853 -> 3773
+  Motor 19: action=+0.06408 delta=+9 target=1359 -> 1368
+
+ACTION #8 TELEMETRY
+  Motor 16: pos=550 target=584 current=25mA voltage=5.1000000000000005V temp=24°C PWM=54 velocity=0 HW=0
+  Motor 17: pos=1504 target=1629 current=128mA voltage=5.1000000000000005V temp=22°C PWM=196 velocity=1 HW=0
+  Motor 18: pos=3775 target=3773 current=-16mA voltage=5.0V temp=22°C PWM=-5 velocity=1 HW=0
+  Motor 19: pos=1354 target=1368 current=16mA voltage=5.2V temp=22°C PWM=21 velocity=1 HW=0
+  ACTION #8 SUCCESS
+------ in april tag -------
+x:  -0.20520374301512634
+y:  -0.4083458598865209
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.20520374301512634
+y:  -0.4083458598865209
+------ in april tag -------
+x:  -0.20488485522431907
+y:  -0.40804695826351295
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.20488485522431907
+y:  -0.40804695826351295
+------ in april tag -------
+x:  -0.2051055383373499
+y:  -0.4080991569925865
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.2051055383373499
+y:  -0.4080991569925865
+
+============================================================
+RL ACTION #9
+raw action: [-0.9832021  -0.27547112  0.6995534  -0.9346173 ]
+============================================================
+  Motor 16: action=-0.98320 delta=-147 target=584 -> 437
+  Motor 17: action=-0.27547 delta=-41 target=1629 -> 1588
+  Motor 18: action=+0.69955 delta=+104 target=3773 -> 3877
+  Motor 19: action=-0.93462 delta=-140 target=1368 -> 1228
+
+ACTION #9 TELEMETRY
+  Motor 16: pos=467 target=437 current=-10mA voltage=5.2V temp=24°C PWM=7 velocity=-1 HW=0
+  Motor 17: pos=1556 target=1588 current=20mA voltage=5.2V temp=22°C PWM=50 velocity=1 HW=0
+  Motor 18: pos=3878 target=3877 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=1 HW=0
+  Motor 19: pos=1228 target=1228 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=1 HW=0
+  ACTION #9 SUCCESS
+------ in april tag -------
+x:  -0.19761810052208958
+y:  -0.40758262479381707
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19761810052208958
+y:  -0.40758262479381707
+------ in april tag -------
+x:  -0.19751054734628157
+y:  -0.4070845143132338
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19751054734628157
+y:  -0.4070845143132338
+------ in april tag -------
+x:  -0.19775275807661077
+y:  -0.40741567007351065
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19775275807661077
+y:  -0.40741567007351065
+
+============================================================
+RL ACTION #10
+raw action: [ 0.8488946  -0.94359505  0.40978682 -0.14562659]
+============================================================
+  Motor 16: action=+0.84889 delta=+127 target=437 -> 564
+  Motor 17: action=-0.94360 delta=-141 target=1588 -> 1447
+  Motor 18: action=+0.40979 delta=+61 target=3877 -> 3938
+  Motor 19: action=-0.14563 delta=-21 target=1228 -> 1207
+
+ACTION #10 TELEMETRY
+  Motor 16: pos=493 target=564 current=19mA voltage=5.2V temp=24°C PWM=37 velocity=10 HW=0
+  Motor 17: pos=1441 target=1447 current=12mA voltage=5.2V temp=22°C PWM=9 velocity=0 HW=0
+  Motor 18: pos=3939 target=3938 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=0 HW=0
+  Motor 19: pos=1207 target=1207 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=0 HW=0
+  ACTION #10 SUCCESS
+------ in april tag -------
+x:  -0.19676338934531687
+y:  -0.411235503545679
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19676338934531687
+y:  -0.411235503545679
+------ in april tag -------
+x:  -0.19651869005513398
+y:  -0.4115543916849834
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19651869005513398
+y:  -0.4115543916849834
+------ in april tag -------
+x:  -0.19738249777071865
+y:  -0.41171388576818985
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19738249777071865
+y:  -0.41171388576818985
+
+[SAFETY INTERVENTION #5]
+  Reason: tension_too_low
+  Detail: Pair [18, 19] tension 4mA < 30.0mA
+  Raw action: [ 0.64891124 -0.5058107  -0.11986239 -0.17439643]
+  Safe action: [ 0.64891124 -0.5058107  -0.02397248 -0.03487929]
+  Modification: [0.         0.         0.09588991 0.13951714]
+
+============================================================
+RL ACTION #11
+raw action: [ 0.64891124 -0.5058107  -0.02397248 -0.03487929]
+============================================================
+  Motor 16: action=+0.64891 delta=+97 target=564 -> 661
+  Motor 17: action=-0.50581 delta=-75 target=1447 -> 1372
+  Motor 18: action=-0.02397 delta=-3 target=3938 -> 3935
+  Motor 19: action=-0.03488 delta=-5 target=1207 -> 1202
+
+ACTION #11 TELEMETRY
+  Motor 16: pos=594 target=661 current=26mA voltage=5.2V temp=24°C PWM=54 velocity=6 HW=0
+  Motor 17: pos=1363 target=1372 current=13mA voltage=5.2V temp=22°C PWM=14 velocity=0 HW=0
+  Motor 18: pos=3936 target=3935 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=0 HW=0
+  Motor 19: pos=1202 target=1202 current=-3mA voltage=5.2V temp=22°C PWM=0 velocity=0 HW=0
+  ACTION #11 SUCCESS
+------ in april tag -------
+x:  -0.19623798739443052
+y:  -0.4137873636029372
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19623798739443052
+y:  -0.4137873636029372
+------ in april tag -------
+x:  -0.19644919754339168
+y:  -0.4136921477294172
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19644919754339168
+y:  -0.4136921477294172
+------ in april tag -------
+x:  -0.19662733222833323
+y:  -0.41375392637763264
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19662733222833323
+y:  -0.41375392637763264
+  [SAFETY PENALTY] -0.05 (reason: tension_too_low, magnitude: 0.059)
+
+============================================================
+RL ACTION #12
+raw action: [-0.31410852  0.21451925  0.65430427  0.59969336]
+============================================================
+  Motor 16: action=-0.31411 delta=-47 target=661 -> 614
+  Motor 17: action=+0.21452 delta=+32 target=1372 -> 1404
+  Motor 18: action=+0.65430 delta=+98 target=3935 -> 4033
+  Motor 19: action=+0.59969 delta=+89 target=1202 -> 1291
+
+ACTION #12 TELEMETRY
+  Motor 16: pos=612 target=614 current=13mA voltage=5.2V temp=24°C PWM=4 velocity=0 HW=0
+  Motor 17: pos=1370 target=1404 current=23mA voltage=5.2V temp=22°C PWM=53 velocity=1 HW=0
+  Motor 18: pos=4034 target=4033 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=1 HW=0
+  Motor 19: pos=1292 target=1291 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=1 HW=0
+  ACTION #12 SUCCESS
+------ in april tag -------
+x:  -0.1972074681623644
+y:  -0.4124480044446619
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.1972074681623644
+y:  -0.4124480044446619
+------ in april tag -------
+x:  -0.1971207370876009
+y:  -0.4129122364047092
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.1971207370876009
+y:  -0.4129122364047092
+------ in april tag -------
+x:  -0.19734526842794675
+y:  -0.41294190181599433
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19734526842794675
+y:  -0.41294190181599433
+
+============================================================
+RL ACTION #13
+raw action: [ 0.3351852  0.6002884  0.9372572 -0.1216728]
+============================================================
+  Motor 16: action=+0.33519 delta=+50 target=614 -> 664
+  Motor 17: action=+0.60029 delta=+90 target=1404 -> 1494
+  Motor 18: action=+0.93726 delta=+140 target=4033 -> 4173
+  Motor 19: action=-0.12167 delta=-18 target=1291 -> 1273
+
+ACTION #13 TELEMETRY
+  Motor 16: pos=614 target=664 current=33mA voltage=5.2V temp=24°C PWM=78 velocity=0 HW=0
+  Motor 17: pos=1401 target=1494 current=67mA voltage=5.2V temp=22°C PWM=145 velocity=1 HW=0
+  Motor 18: pos=4173 target=4173 current=16mA voltage=5.0V temp=22°C PWM=0 velocity=1 HW=0
+  Motor 19: pos=1273 target=1273 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=0 HW=0
+  ACTION #13 SUCCESS
+------ in april tag -------
+x:  -0.19631326797014403
+y:  -0.4126350979566273
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19631326797014403
+y:  -0.4126350979566273
+------ in april tag -------
+x:  -0.19578137035495805
+y:  -0.41275912232109724
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19578137035495805
+y:  -0.41275912232109724
+------ in april tag -------
+x:  -0.19592486579876628
+y:  -0.4128071484222571
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19592486579876628
+y:  -0.4128071484222571
+
+============================================================
+RL ACTION #14
+raw action: [ 0.7389434  -0.26534247  0.6770635   0.85266143]
+============================================================
+  Motor 16: action=+0.73894 delta=+110 target=664 -> 774
+  Motor 17: action=-0.26534 delta=-39 target=1494 -> 1455
+  Motor 18: action=+0.67706 delta=+101 target=4173 -> 4274
+  Motor 19: action=+0.85266 delta=+127 target=1273 -> 1400
+
+ACTION #14 TELEMETRY
+  Motor 16: pos=642 target=774 current=124mA voltage=5.0V temp=24°C PWM=203 velocity=1 HW=0
+  Motor 17: pos=1400 target=1455 current=34mA voltage=5.2V temp=22°C PWM=85 velocity=0 HW=0
+  Motor 18: pos=4275 target=4274 current=4mA voltage=5.2V temp=22°C PWM=0 velocity=0 HW=0
+  Motor 19: pos=1395 target=1400 current=15mA voltage=5.0V temp=22°C PWM=7 velocity=1 HW=0
+  ACTION #14 SUCCESS
+------ in april tag -------
+x:  -0.20309444640994553
+y:  -0.4115011751688169
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.20309444640994553
+y:  -0.4115011751688169
+------ in april tag -------
+x:  -0.20321309557281553
+y:  -0.4120529968263671
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.20321309557281553
+y:  -0.4120529968263671
+------ in april tag -------
+x:  -0.20310555341692466
+y:  -0.4115676051510655
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.20310555341692466
+y:  -0.4115676051510655
+
+[SAFETY INTERVENTION #6]
+  Reason: tension_too_low
+  Detail: Pair [18, 19] tension 15mA < 30.0mA
+  Raw action: [-0.20123048  0.5148433  -0.9927627  -0.895272  ]
+  Safe action: [-0.20123048  0.5148433  -0.19855253 -0.17905441]
+  Modification: [0.         0.         0.79421014 0.71621764]
+
+============================================================
+RL ACTION #15
+raw action: [-0.20123048  0.5148433  -0.19855253 -0.17905441]
+============================================================
+  Motor 16: action=-0.20123 delta=-30 target=774 -> 744
+  Motor 17: action=+0.51484 delta=+77 target=1455 -> 1532
+  Motor 18: action=-0.19855 delta=-29 target=4274 -> 4245
+  Motor 19: action=-0.17905 delta=-26 target=1400 -> 1374
+
+ACTION #15 TELEMETRY
+  Motor 16: pos=645 target=744 current=82mA voltage=5.2V temp=24°C PWM=156 velocity=0 HW=0
+  Motor 17: pos=1400 target=1532 current=112mA voltage=5.1000000000000005V temp=22°C PWM=206 velocity=1 HW=0
+  Motor 18: pos=4246 target=4245 current=0mA voltage=4.9V temp=22°C PWM=0 velocity=0 HW=0
+  Motor 19: pos=1374 target=1374 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=0 HW=0
+  ACTION #15 SUCCESS
+------ in april tag -------
+x:  -0.2004053452775977
+y:  -0.41281897658972677
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.2004053452775977
+y:  -0.41281897658972677
+------ in april tag -------
+x:  -0.19940098858169353
+y:  -0.41284158097178064
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19940098858169353
+y:  -0.41284158097178064
+------ in april tag -------
+x:  -0.19963755379801706
+y:  -0.4131155255407536
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19963755379801706
+y:  -0.4131155255407536
+  [SAFETY PENALTY] -0.32 (reason: tension_too_low, magnitude: 0.378)
+
+============================================================
+RL ACTION #16
+raw action: [-0.78914344 -0.35078788 -0.5566989   0.29209808]
+============================================================
+  Motor 16: action=-0.78914 delta=-118 target=744 -> 626
+  Motor 17: action=-0.35079 delta=-52 target=1532 -> 1480
+  Motor 18: action=-0.55670 delta=-83 target=4245 -> 4162
+  Motor 19: action=+0.29210 delta=+43 target=1374 -> 1417
+
+ACTION #16 TELEMETRY
+  Motor 16: pos=614 target=626 current=16mA voltage=5.2V temp=24°C PWM=21 velocity=0 HW=0
+  Motor 17: pos=1403 target=1480 current=54mA voltage=5.2V temp=22°C PWM=120 velocity=1 HW=0
+  Motor 18: pos=4163 target=4162 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=1 HW=0
+  Motor 19: pos=1413 target=1417 current=15mA voltage=5.2V temp=22°C PWM=7 velocity=1 HW=0
+  ACTION #16 SUCCESS
+------ in april tag -------
+x:  -0.20752169659016992
+y:  -0.4085612866884253
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.20752169659016992
+y:  -0.4085612866884253
+------ in april tag -------
+x:  -0.20778480907536245
+y:  -0.40901347333769267
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.20778480907536245
+y:  -0.40901347333769267
+------ in april tag -------
+x:  -0.2072910011411389
+y:  -0.4093906649721806
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.2072910011411389
+y:  -0.4093906649721806
+
+============================================================
+RL ACTION #17
+raw action: [-0.22456235 -0.12610078  0.73936737 -0.24978292]
+============================================================
+  Motor 16: action=-0.22456 delta=-33 target=626 -> 593
+  Motor 17: action=-0.12610 delta=-18 target=1480 -> 1462
+  Motor 18: action=+0.73937 delta=+110 target=4162 -> 4272
+  Motor 19: action=-0.24978 delta=-37 target=1417 -> 1380
+
+ACTION #17 TELEMETRY
+  Motor 16: pos=589 target=593 current=14mA voltage=5.2V temp=24°C PWM=9 velocity=0 HW=0
+  Motor 17: pos=1412 target=1462 current=30mA voltage=5.2V temp=22°C PWM=78 velocity=0 HW=0
+  Motor 18: pos=4272 target=4272 current=16mA voltage=5.1000000000000005V temp=22°C PWM=4 velocity=2 HW=0
+  Motor 19: pos=1380 target=1380 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=0 HW=0
+  ACTION #17 SUCCESS
+------ in april tag -------
+x:  -0.20183196624189487
+y:  -0.41105573794148703
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.20183196624189487
+y:  -0.41105573794148703
+------ in april tag -------
+x:  -0.2004737300906864
+y:  -0.4120870260153519
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.2004737300906864
+y:  -0.4120870260153519
+------ in april tag -------
+x:  -0.20115349758629797
+y:  -0.41206073030546314
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.20115349758629797
+y:  -0.41206073030546314
+
+[SAFETY INTERVENTION #7]
+  Reason: tension_too_low
+  Detail: Pair [18, 19] tension 0mA < 30.0mA
+  Raw action: [ 0.22486342 -0.15075172 -0.39446393 -0.8749755 ]
+  Safe action: [ 0.22486342 -0.15075172 -0.07889278 -0.1749951 ]
+  Modification: [0.         0.         0.31557113 0.6999804 ]
+
+============================================================
+RL ACTION #18
+raw action: [ 0.22486342 -0.15075172 -0.07889278 -0.1749951 ]
+============================================================
+  Motor 16: action=+0.22486 delta=+33 target=593 -> 626
+  Motor 17: action=-0.15075 delta=-22 target=1462 -> 1440
+  Motor 18: action=-0.07889 delta=-11 target=4272 -> 4261
+  Motor 19: action=-0.17500 delta=-26 target=1380 -> 1354
+
+ACTION #18 TELEMETRY
+  Motor 16: pos=587 target=626 current=28mA voltage=5.2V temp=24°C PWM=60 velocity=1 HW=0
+  Motor 17: pos=1412 target=1440 current=19mA voltage=5.2V temp=22°C PWM=43 velocity=0 HW=0
+  Motor 18: pos=4262 target=4261 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=0 HW=0
+  Motor 19: pos=1355 target=1354 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=0 HW=0
+  ACTION #18 SUCCESS
+------ in april tag -------
+x:  -0.20108821154802264
+y:  -0.4116534602944556
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.20108821154802264
+y:  -0.4116534602944556
+------ in april tag -------
+x:  -0.20063945044116566
+y:  -0.4119193466816914
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.20063945044116566
+y:  -0.4119193466816914
+------ in april tag -------
+x:  -0.200311995834392
+y:  -0.4121993270649831
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.200311995834392
+y:  -0.4121993270649831
+  [SAFETY PENALTY] -0.21 (reason: tension_too_low, magnitude: 0.254)
+
+============================================================
+RL ACTION #19
+raw action: [-0.17287302  0.67057437  0.7088436   0.7855591 ]
+============================================================
+  Motor 16: action=-0.17287 delta=-25 target=626 -> 601
+  Motor 17: action=+0.67057 delta=+100 target=1440 -> 1540
+  Motor 18: action=+0.70884 delta=+106 target=4261 -> 4367
+  Motor 19: action=+0.78556 delta=+117 target=1354 -> 1471
+
+ACTION #19 TELEMETRY
+  Motor 16: pos=585 target=601 current=16mA voltage=5.2V temp=24°C PWM=26 velocity=0 HW=0
+  Motor 17: pos=1436 target=1540 current=80mA voltage=5.1000000000000005V temp=22°C PWM=162 velocity=1 HW=0
+  Motor 18: pos=4368 target=4367 current=13mA voltage=5.2V temp=22°C PWM=0 velocity=1 HW=0
+  Motor 19: pos=1466 target=1471 current=15mA voltage=5.2V temp=22°C PWM=7 velocity=1 HW=0
+  ACTION #19 SUCCESS
+------ in april tag -------
+x:  -0.20822477869795797
+y:  -0.40827026117930904
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.20822477869795797
+y:  -0.40827026117930904
+------ in april tag -------
+x:  -0.20801334370696642
+y:  -0.40837485919983646
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.20801334370696642
+y:  -0.40837485919983646
+------ in april tag -------
+x:  -0.20839083278556453
+y:  -0.40855480799754046
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.20839083278556453
+y:  -0.40855480799754046
+
+[SAFETY INTERVENTION #8]
+  Reason: tension_too_low
+  Detail: Pair [18, 19] tension 14mA < 30.0mA
+  Raw action: [ 0.52172285  0.7131332  -0.01389354 -0.31434986]
+  Safe action: [ 0.52172285  0.7131332  -0.00277871 -0.06286997]
+  Modification: [0.         0.         0.01111484 0.2514799 ]
+
+============================================================
+RL ACTION #20
+raw action: [ 0.52172285  0.7131332  -0.00277871 -0.06286997]
+============================================================
+  Motor 16: action=+0.52172 delta=+78 target=601 -> 679
+  Motor 17: action=+0.71313 delta=+106 target=1540 -> 1646
+  Motor 18: action=-0.00278 delta=+0 target=4367 -> 4367
+  Motor 19: action=-0.06287 delta=-9 target=1471 -> 1462
+
+ACTION #20 TELEMETRY
+  Motor 16: pos=583 target=679 current=78mA voltage=5.1000000000000005V temp=24°C PWM=150 velocity=0 HW=0
+  Motor 17: pos=1467 target=1646 current=194mA voltage=5.0V temp=22°C PWM=281 velocity=1 HW=0
+  Motor 18: pos=4368 target=4367 current=0mA voltage=4.9V temp=22°C PWM=0 velocity=0 HW=0
+  Motor 19: pos=1463 target=1462 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=0 HW=0
+  ACTION #20 SUCCESS
+------ in april tag -------
+x:  -0.20535343159431135
+y:  -0.40934644861106345
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.20535343159431135
+y:  -0.40934644861106345
+------ in april tag -------
+x:  -0.2057418318976469
+y:  -0.40985604567152173
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.2057418318976469
+y:  -0.40985604567152173
+------ in april tag -------
+x:  -0.20545022892419784
+y:  -0.409076084687676
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.20545022892419784
+y:  -0.409076084687676
+  [SAFETY PENALTY] -0.06 (reason: tension_too_low, magnitude: 0.066)
+
+[SAFETY INTERVENTION #9]
+  Reason: tension_too_low
+  Detail: Pair [18, 19] tension 16mA < 30.0mA
+  Raw action: [ 0.8252533  -0.14739211 -0.58409077 -0.7736912 ]
+  Safe action: [ 0.8252533  -0.14739211 -0.11681815 -0.15473823]
+  Modification: [0.         0.         0.4672726  0.61895293]
+
+============================================================
+RL ACTION #21
+raw action: [ 0.8252533  -0.14739211 -0.11681815 -0.15473823]
+============================================================
+  Motor 16: action=+0.82525 delta=+123 target=679 -> 802
+  Motor 17: action=-0.14739 delta=-22 target=1646 -> 1624
+  Motor 18: action=-0.11682 delta=-17 target=4367 -> 4350
+  Motor 19: action=-0.15474 delta=-23 target=1462 -> 1439
+
+ACTION #21 TELEMETRY
+  Motor 16: pos=598 target=802 current=247mA voltage=4.7V temp=24°C PWM=317 velocity=1 HW=0
+  Motor 17: pos=1467 target=1624 current=155mA voltage=5.0V temp=22°C PWM=246 velocity=1 HW=0
+  Motor 18: pos=4351 target=4350 current=0mA voltage=4.800000000000001V temp=22°C PWM=0 velocity=0 HW=0
+  Motor 19: pos=1439 target=1439 current=0mA voltage=4.7V temp=22°C PWM=0 velocity=0 HW=0
+  ACTION #21 SUCCESS
+------ in april tag -------
+x:  -0.2033793339512865
+y:  -0.41099611763304245
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.2033793339512865
+y:  -0.41099611763304245
+------ in april tag -------
+x:  -0.20333115868108537
+y:  -0.4108695609899816
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.20333115868108537
+y:  -0.4108695609899816
+------ in april tag -------
+x:  -0.2031466516188324
+y:  -0.41132385370940555
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.2031466516188324
+y:  -0.41132385370940555
+  [SAFETY PENALTY] -0.23 (reason: tension_too_low, magnitude: 0.272)
+
+[SAFETY INTERVENTION #10]
+  Reason: tension_too_low
+  Detail: Pair [18, 19] tension 1mA < 30.0mA
+  Raw action: [-0.79860663 -0.9452589  -0.75830567 -0.5206165 ]
+  Safe action: [-0.79860663 -0.9452589  -0.15166113 -0.10412329]
+  Modification: [0.         0.         0.6066445  0.41649318]
+
+============================================================
+RL ACTION #22
+raw action: [-0.79860663 -0.9452589  -0.15166113 -0.10412329]
+============================================================
+  Motor 16: action=-0.79861 delta=-119 target=802 -> 683
+  Motor 17: action=-0.94526 delta=-141 target=1624 -> 1483
+  Motor 18: action=-0.15166 delta=-22 target=4350 -> 4328
+  Motor 19: action=-0.10412 delta=-15 target=1439 -> 1424
+
+ACTION #22 TELEMETRY
+  Motor 16: pos=601 target=683 current=60mA voltage=5.1000000000000005V temp=24°C PWM=128 velocity=1 HW=0
+  Motor 17: pos=1449 target=1483 current=22mA voltage=5.2V temp=23°C PWM=53 velocity=0 HW=0
+  Motor 18: pos=4329 target=4328 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=1 HW=0
+  Motor 19: pos=1425 target=1424 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=0 HW=0
+  ACTION #22 SUCCESS
+------ in april tag -------
+x:  -0.20183879238846378
+y:  -0.4118893985636883
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.20183879238846378
+y:  -0.4118893985636883
+------ in april tag -------
+x:  -0.20244274872223922
+y:  -0.4116132153962823
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.20244274872223922
+y:  -0.4116132153962823
+------ in april tag -------
+x:  -0.20182094281408725
+y:  -0.41127225621984287
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.20182094281408725
+y:  -0.41127225621984287
+  [SAFETY PENALTY] -0.21 (reason: tension_too_low, magnitude: 0.256)
+
+============================================================
+RL ACTION #23
+raw action: [-0.33689     0.5560609   0.80357486 -0.7934649 ]
+============================================================
+  Motor 16: action=-0.33689 delta=-50 target=683 -> 633
+  Motor 17: action=+0.55606 delta=+83 target=1483 -> 1566
+  Motor 18: action=+0.80357 delta=+120 target=4328 -> 4448
+  Motor 19: action=-0.79346 delta=-119 target=1424 -> 1305
+
+ACTION #23 TELEMETRY
+  Motor 16: pos=601 target=633 current=23mA voltage=5.1000000000000005V temp=24°C PWM=50 velocity=1 HW=0
+  Motor 17: pos=1449 target=1566 current=97mA voltage=5.1000000000000005V temp=23°C PWM=182 velocity=1 HW=0
+  Motor 18: pos=4448 target=4448 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=1 HW=0
+  Motor 19: pos=1306 target=1305 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=0 HW=0
+  ACTION #23 SUCCESS
+------ in april tag -------
+x:  -0.19927795569630766
+y:  -0.4116469507837841
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19927795569630766
+y:  -0.4116469507837841
+------ in april tag -------
+x:  -0.19859749087518902
+y:  -0.41177741122242173
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19859749087518902
+y:  -0.41177741122242173
+------ in april tag -------
+x:  -0.19891513610833272
+y:  -0.4118173410475681
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19891513610833272
+y:  -0.4118173410475681
+
+============================================================
+RL ACTION #24
+raw action: [ 0.7941158 -0.5886915  0.7513535 -0.5945947]
+============================================================
+  Motor 16: action=+0.79412 delta=+119 target=633 -> 752
+  Motor 17: action=-0.58869 delta=-88 target=1566 -> 1478
+  Motor 18: action=+0.75135 delta=+112 target=4448 -> 4560
+  Motor 19: action=-0.59459 delta=-89 target=1305 -> 1216
+
+ACTION #24 TELEMETRY
+  Motor 16: pos=602 target=752 current=148mA voltage=5.1000000000000005V temp=24°C PWM=232 velocity=1 HW=0
+  Motor 17: pos=1448 target=1478 current=19mA voltage=5.2V temp=23°C PWM=45 velocity=1 HW=0
+  Motor 18: pos=4559 target=4560 current=16mA voltage=5.2V temp=22°C PWM=0 velocity=2 HW=0
+  Motor 19: pos=1216 target=1216 current=0mA voltage=5.1000000000000005V temp=22°C PWM=0 velocity=0 HW=0
+  ACTION #24 SUCCESS
+------ in april tag -------
+x:  -0.19820111804643675
+y:  -0.41240366363257525
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19820111804643675
+y:  -0.41240366363257525
+------ in april tag -------
+x:  -0.19810908449236497
+y:  -0.4121948713319441
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19810908449236497
+y:  -0.4121948713319441
+------ in april tag -------
+x:  -0.197745099403987
+y:  -0.4122047420452577
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.197745099403987
+y:  -0.4122047420452577
+
+[SAFETY INTERVENTION #11]
+  Reason: tension_too_low
+  Detail: Pair [18, 19] tension 0mA < 30.0mA
+  Raw action: [-0.7715066   0.9886185  -0.26924884 -0.36076704]
+  Safe action: [-0.7715066   0.9886185  -0.05384977 -0.0721534 ]
+  Modification: [0.         0.         0.21539907 0.28861362]
+
+============================================================
+RL ACTION #25
+raw action: [-0.7715066   0.9886185  -0.05384977 -0.0721534 ]
+============================================================
+  Motor 16: action=-0.77151 delta=-115 target=752 -> 637
+  Motor 17: action=+0.98862 delta=+148 target=1478 -> 1626
+  Motor 18: action=-0.05385 delta=-8 target=4560 -> 4552
+  Motor 19: action=-0.07215 delta=-10 target=1216 -> 1206
+
+ACTION #25 TELEMETRY
+  Motor 16: pos=601 target=637 current=26mA voltage=5.1000000000000005V temp=24°C PWM=56 velocity=0 HW=0
+  Motor 17: pos=1460 target=1626 current=168mA voltage=5.0V temp=23°C PWM=260 velocity=1 HW=0
+  Motor 18: pos=4553 target=4552 current=0mA voltage=4.9V temp=22°C PWM=0 velocity=0 HW=0
+  Motor 19: pos=1206 target=1206 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=0 HW=0
+  ACTION #25 SUCCESS
+------ in april tag -------
+x:  -0.19685647835932696
+y:  -0.4115953600374576
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19685647835932696
+y:  -0.4115953600374576
+------ in april tag -------
+x:  -0.19660845084451042
+y:  -0.4113741392766391
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19660845084451042
+y:  -0.4113741392766391
+------ in april tag -------
+x:  -0.1965235154436014
+y:  -0.41177737516306245
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.1965235154436014
+y:  -0.41177737516306245
+  [SAFETY PENALTY] -0.11 (reason: tension_too_low, magnitude: 0.126)
+
+[SAFETY INTERVENTION #12]
+  Reason: tension_too_low
+  Detail: Pair [18, 19] tension 0mA < 30.0mA
+  Raw action: [ 0.9825148  -0.876276   -0.6239979  -0.19309846]
+  Safe action: [ 0.9825148  -0.876276   -0.12479959 -0.03861969]
+  Modification: [0.         0.         0.49919835 0.15447876]
+
+============================================================
+RL ACTION #26
+raw action: [ 0.9825148  -0.876276   -0.12479959 -0.03861969]
+============================================================
+  Motor 16: action=+0.98251 delta=+147 target=637 -> 784
+  Motor 17: action=-0.87628 delta=-131 target=1626 -> 1495
+  Motor 18: action=-0.12480 delta=-18 target=4552 -> 4534
+  Motor 19: action=-0.03862 delta=-5 target=1206 -> 1201
+
+ACTION #26 TELEMETRY
+  Motor 16: pos=612 target=784 current=184mA voltage=4.9V temp=24°C PWM=265 velocity=1 HW=0
+  Motor 17: pos=1451 target=1495 current=27mA voltage=5.2V temp=23°C PWM=68 velocity=0 HW=0
+  Motor 18: pos=4534 target=4534 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=0 HW=0
+  Motor 19: pos=1201 target=1201 current=0mA voltage=5.1000000000000005V temp=22°C PWM=0 velocity=0 HW=0
+  ACTION #26 SUCCESS
+------ in april tag -------
+x:  -0.19587203157375235
+y:  -0.41147941059288284
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19587203157375235
+y:  -0.41147941059288284
+------ in april tag -------
+x:  -0.1954930344777694
+y:  -0.41196386759452325
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.1954930344777694
+y:  -0.41196386759452325
+------ in april tag -------
+x:  -0.1954702233442233
+y:  -0.41215973714319565
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.1954702233442233
+y:  -0.41215973714319565
+  [SAFETY PENALTY] -0.14 (reason: tension_too_low, magnitude: 0.163)
+
+============================================================
+RL ACTION #27
+raw action: [ 0.36613455  0.7427422   0.14731902 -0.03196936]
+============================================================
+  Motor 16: action=+0.36613 delta=+54 target=784 -> 838
+  Motor 17: action=+0.74274 delta=+111 target=1495 -> 1606
+  Motor 18: action=+0.14732 delta=+22 target=4534 -> 4556
+  Motor 19: action=-0.03197 delta=-4 target=1201 -> 1197
+
+ACTION #27 TELEMETRY
+  Motor 16: pos=629 target=838 current=295mA voltage=4.800000000000001V temp=24°C PWM=323 velocity=1 HW=0
+  Motor 17: pos=1451 target=1606 current=150mA voltage=5.0V temp=23°C PWM=243 velocity=0 HW=0
+  Motor 18: pos=4557 target=4556 current=0mA voltage=4.800000000000001V temp=22°C PWM=0 velocity=0 HW=0
+  Motor 19: pos=1199 target=1197 current=-16mA voltage=4.800000000000001V temp=22°C PWM=-4 velocity=0 HW=0
+  ACTION #27 SUCCESS
+------ in april tag -------
+x:  -0.19570040522790605
+y:  -0.4129716789083587
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19570040522790605
+y:  -0.4129716789083587
+------ in april tag -------
+x:  -0.19513367781779312
+y:  -0.4125521999698406
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19513367781779312
+y:  -0.4125521999698406
+------ in april tag -------
+x:  -0.19563096570327168
+y:  -0.41229151275359194
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19563096570327168
+y:  -0.41229151275359194
+
+============================================================
+RL ACTION #28
+raw action: [-0.16312118 -0.6366719   0.635582   -0.7005602 ]
+============================================================
+  Motor 16: action=-0.16312 delta=-24 target=838 -> 814
+  Motor 17: action=-0.63667 delta=-95 target=1606 -> 1511
+  Motor 18: action=+0.63558 delta=+95 target=4556 -> 4651
+  Motor 19: action=-0.70056 delta=-105 target=1197 -> 1092
+
+ACTION #28 TELEMETRY
+  Motor 16: pos=630 target=814 current=235mA voltage=4.800000000000001V temp=24°C PWM=285 velocity=0 HW=0
+  Motor 17: pos=1451 target=1511 current=37mA voltage=5.2V temp=23°C PWM=93 velocity=0 HW=0
+  Motor 18: pos=4652 target=4651 current=11mA voltage=5.1000000000000005V temp=22°C PWM=0 velocity=0 HW=0
+  Motor 19: pos=1093 target=1092 current=0mA voltage=5.1000000000000005V temp=22°C PWM=0 velocity=0 HW=0
+  ACTION #28 SUCCESS
+------ in april tag -------
+x:  -0.1958348119453417
+y:  -0.41278821961382783
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.1958348119453417
+y:  -0.41278821961382783
+------ in april tag -------
+x:  -0.19569959012714688
+y:  -0.4128510158671193
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19569959012714688
+y:  -0.4128510158671193
+------ in april tag -------
+x:  -0.19608929555696336
+y:  -0.41248514237445966
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19608929555696336
+y:  -0.41248514237445966
+
+[SAFETY INTERVENTION #13]
+  Reason: tension_too_low
+  Detail: Pair [18, 19] tension 0mA < 30.0mA
+  Raw action: [-0.59630334 -0.92025644 -0.2595562  -0.7065442 ]
+  Safe action: [-0.59630334 -0.92025644 -0.05191124 -0.14130884]
+  Modification: [0.         0.         0.20764497 0.5652354 ]
+
+============================================================
+RL ACTION #29
+raw action: [-0.59630334 -0.92025644 -0.05191124 -0.14130884]
+============================================================
+  Motor 16: action=-0.59630 delta=-89 target=814 -> 725
+  Motor 17: action=-0.92026 delta=-138 target=1511 -> 1373
+  Motor 18: action=-0.05191 delta=-7 target=4651 -> 4644
+  Motor 19: action=-0.14131 delta=-21 target=1092 -> 1071
+
+ACTION #29 TELEMETRY
+  Motor 16: pos=643 target=725 current=38mA voltage=5.2V temp=25°C PWM=79 velocity=2 HW=0
+  Motor 17: pos=1359 target=1373 current=14mA voltage=5.2V temp=23°C PWM=21 velocity=0 HW=0
+  Motor 18: pos=4645 target=4644 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=0 HW=0
+  Motor 19: pos=1071 target=1071 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=1 HW=0
+  ACTION #29 SUCCESS
+------ in april tag -------
+x:  -0.19460233204236937
+y:  -0.41469793222306567
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19460233204236937
+y:  -0.41469793222306567
+------ in april tag -------
+x:  -0.194686116984512
+y:  -0.4146683487199411
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.194686116984512
+y:  -0.4146683487199411
+------ in april tag -------
+x:  -0.1946270811015336
+y:  -0.4146602597069088
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.1946270811015336
+y:  -0.4146602597069088
+  [SAFETY PENALTY] -0.16 (reason: tension_too_low, magnitude: 0.193)
+
+[SAFETY INTERVENTION #14]
+  Reason: tension_too_low
+  Detail: Pair [18, 19] tension 0mA < 30.0mA
+  Raw action: [ 0.9221455   0.9784234  -0.62585545 -0.47967556]
+  Safe action: [ 0.9221455   0.9784234  -0.1251711  -0.09593511]
+  Modification: [0.         0.         0.5006844  0.38374045]
+
+============================================================
+RL ACTION #30
+raw action: [ 0.9221455   0.9784234  -0.1251711  -0.09593511]
+============================================================
+  Motor 16: action=+0.92215 delta=+138 target=725 -> 863
+  Motor 17: action=+0.97842 delta=+146 target=1373 -> 1519
+  Motor 18: action=-0.12517 delta=-18 target=4644 -> 4626
+  Motor 19: action=-0.09594 delta=-14 target=1071 -> 1057
+
+ACTION #30 TELEMETRY
+  Motor 16: pos=704 target=863 current=159mA voltage=5.1000000000000005V temp=25°C PWM=248 velocity=0 HW=0
+  Motor 17: pos=1371 target=1519 current=136mA voltage=5.1000000000000005V temp=23°C PWM=231 velocity=1 HW=0
+  Motor 18: pos=4627 target=4626 current=0mA voltage=4.9V temp=22°C PWM=0 velocity=0 HW=0
+  Motor 19: pos=1058 target=1057 current=-15mA voltage=4.9V temp=22°C PWM=-2 velocity=1 HW=0
+  ACTION #30 SUCCESS
+------ in april tag -------
+x:  -0.19469047562170938
+y:  -0.41527244364274085
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19469047562170938
+y:  -0.41527244364274085
+------ in april tag -------
+x:  -0.19362307537035006
+y:  -0.4154934864734243
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19362307537035006
+y:  -0.4154934864734243
+------ in april tag -------
+x:  -0.19394950866697538
+y:  -0.4153093335736827
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19394950866697538
+y:  -0.4153093335736827
+  [SAFETY PENALTY] -0.19 (reason: tension_too_low, magnitude: 0.221)
+
+============================================================
+RL ACTION #31
+raw action: [0.29022405 0.49338806 0.73366153 0.81583583]
+============================================================
+  Motor 16: action=+0.29022 delta=+43 target=863 -> 906
+  Motor 17: action=+0.49339 delta=+74 target=1519 -> 1593
+  Motor 18: action=+0.73366 delta=+110 target=4626 -> 4736
+  Motor 19: action=+0.81584 delta=+122 target=1057 -> 1179
+
+ACTION #31 TELEMETRY
+  Motor 16: pos=705 target=906 current=229mA voltage=5.0V temp=25°C PWM=312 velocity=0 HW=0
+  Motor 17: pos=1371 target=1593 current=262mA voltage=4.7V temp=23°C PWM=346 velocity=1 HW=0
+  Motor 18: pos=4735 target=4736 current=16mA voltage=4.9V temp=22°C PWM=4 velocity=1 HW=0
+  Motor 19: pos=1179 target=1179 current=0mA voltage=5.0V temp=22°C PWM=0 velocity=0 HW=0
+  ACTION #31 SUCCESS
+------ in april tag -------
+x:  -0.193683146929278
+y:  -0.4155547387948907
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.193683146929278
+y:  -0.4155547387948907
+------ in april tag -------
+x:  -0.1937034906684987
+y:  -0.4153290231528989
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.1937034906684987
+y:  -0.4153290231528989
+------ in april tag -------
+x:  -0.1946178536114304
+y:  -0.4152589952544021
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.1946178536114304
+y:  -0.4152589952544021
+
+[SAFETY INTERVENTION #15]
+  Reason: current_aware_scaling
+  Detail: Motor 17: 261mA -> scale=0.88
+  Raw action: [-0.72950697  0.8763063   0.7194133  -0.86172956]
+  Safe action: [-0.72950697  0.7693969   0.7194133  -0.86172956]
+  Modification: [ 0.         -0.10690939  0.          0.        ]
+
+============================================================
+RL ACTION #32
+raw action: [-0.72950697  0.7693969   0.7194133  -0.86172956]
+============================================================
+  Motor 16: action=-0.72951 delta=-109 target=906 -> 797
+  Motor 17: action=+0.76940 delta=+115 target=1593 -> 1708
+  Motor 18: action=+0.71941 delta=+107 target=4736 -> 4843
+  Motor 19: action=-0.86173 delta=-129 target=1179 -> 1050
+
+ACTION #32 TELEMETRY
+  Motor 16: pos=704 target=797 current=70mA voltage=5.0V temp=25°C PWM=145 velocity=1 HW=0
+  Motor 17: pos=1408 target=1708 current=433mA voltage=4.5V temp=23°C PWM=470 velocity=0 HW=0
+  Motor 18: pos=4842 target=4843 current=15mA voltage=4.4V temp=22°C PWM=0 velocity=1 HW=0
+  Motor 19: pos=1050 target=1050 current=0mA voltage=5.1000000000000005V temp=22°C PWM=0 velocity=0 HW=0
+  ACTION #32 SUCCESS
+------ in april tag -------
+x:  -0.1946159082856473
+y:  -0.4141124136479227
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.1946159082856473
+y:  -0.4141124136479227
+------ in april tag -------
+x:  -0.19437526075681075
+y:  -0.414531502364978
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19437526075681075
+y:  -0.414531502364978
+------ in april tag -------
+x:  -0.194431636937432
+y:  -0.41448865106150523
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.194431636937432
+y:  -0.41448865106150523
+  [SAFETY PENALTY] -0.02 (reason: current_aware_scaling, magnitude: 0.027)
+
+============================================================
+RL ACTION #33
+raw action: [-0.89476717 -0.17725398 -0.3694029   0.5588466 ]
+============================================================
+  Motor 16: action=-0.89477 delta=-134 target=797 -> 663
+  Motor 17: action=-0.17725 delta=-26 target=1708 -> 1682
+  Motor 18: action=-0.36940 delta=-55 target=4843 -> 4788
+  Motor 19: action=+0.55885 delta=+83 target=1050 -> 1133
+
+ACTION #33 TELEMETRY
+  Motor 16: pos=642 target=663 current=28mA voltage=5.0V temp=25°C PWM=85 velocity=-8 HW=0
+  Motor 17: pos=1484 target=1682 current=209mA voltage=5.0V temp=24°C PWM=310 velocity=1 HW=0
+  Motor 18: pos=4788 target=4788 current=-2mA voltage=4.800000000000001V temp=22°C PWM=0 velocity=1 HW=0
+  Motor 19: pos=1134 target=1133 current=0mA voltage=5.2V temp=22°C PWM=0 velocity=1 HW=0
+  ACTION #33 SUCCESS
+------ in april tag -------
+x:  -0.19346413518982342
+y:  -0.4117850154597411
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  -0.19346413518982342
+y:  -0.4117850154597411
+------ in april tag -------
+x:  -0.1934538949561096
+y:  -0.4118244618985437
+=============FROM cube tracker get state=========== 
+----  positions from get_state()------
+x:  

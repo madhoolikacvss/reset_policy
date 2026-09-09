@@ -1,4 +1,4 @@
-opencv-pyton
+
 scipy
 dynamixel_sdk
 pupil_apriltags
