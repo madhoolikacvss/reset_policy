@@ -103,22 +103,41 @@ class ResetPolicyEnv(gym.Env):
     
     
     def sample_goal(self):
-        """Sample a random goal position within board bounds (with margin)."""
-        x_goal = np.random.uniform(
-            self.grid.x_min + self.goal_margin,
-            self.grid.x_max - self.goal_margin
-        )
-        y_goal = np.random.uniform(
-            self.grid.y_min + self.goal_margin,
-            self.grid.y_max - self.goal_margin
-        )
-        return x_goal, y_goal
+        """
+        Sample a goal position.
+        
+        Mode 1 (fixed): Cycle through config.environment.fixed_goals
+            - Episode 1 -> goal[0], Episode 2 -> goal[1], ...
+            - Episode N -> goal[(N-1) % len(fixed_goals)]
+        
+        Mode 2 (random): Sample uniformly within board bounds (with margin)
+        """
+        if config.environment.use_fixed_goals:
+            # Cycle through fixed goals based on episode count
+            goal_index = (self.episode_count - 1) % len(config.environment.fixed_goals)
+            x_goal, y_goal = config.environment.fixed_goals[goal_index]
+            print(f"Using fixed goal #{goal_index + 1}: ({x_goal:.3f}, {y_goal:.3f})")
+            return x_goal, y_goal
+        else:
+            # Random sampling
+            x_goal = np.random.uniform(
+                self.grid.x_min + self.goal_margin,
+                self.grid.x_max - self.goal_margin
+            )
+            y_goal = np.random.uniform(
+                self.grid.y_min + self.goal_margin,
+                self.grid.y_max - self.goal_margin
+            )
+            return x_goal, y_goal
     
     
     def reset(self, *, seed=None, options=None):
         """Reset environment for new episode with new goal."""
         super().reset(seed=seed)
-        self.episode_count += 1
+        if options is not None and 'episode_num' in options:
+            self.episode_count = options['episode_num']
+        else:
+            self.episode_count += 1
         time.sleep(3)
         
         print("\n================ ENV RESET ================")

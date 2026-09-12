@@ -75,7 +75,7 @@ def train(env, config=config):
         # Start episode logging
         logger.start_episode(episode + 1)
         
-        state, _ = env.reset()
+        state, _ = env.reset(options={'episode_num': episode + 1})
         episode_reward = 0.0
         terminated = False
         truncated = False
@@ -94,8 +94,13 @@ def train(env, config=config):
             'hardware_error_ids': set(),
             'safety_reasons': {},
             'safety_penalty_by_reason': {},
+            # Goal tracking
+            'goal_x': None,
+            'goal_y': None,
+            'final_distance_to_goal': None,
+            'goal_reached': False,
         }
-        
+
         # Update renderer for new episode
         if hasattr(env, 'renderer') and env.renderer is not None:
             env.renderer.update_episode(episode + 1)
@@ -175,6 +180,12 @@ def train(env, config=config):
                     episode_stats['hardware_error_ids'].add(int(motor_id))
             
             state = next_state
+
+        goal_pos = info.get("goal_position", (None, None))
+        episode_stats['goal_x'] = goal_pos[0]
+        episode_stats['goal_y'] = goal_pos[1]
+        episode_stats['final_distance_to_goal'] = info.get("distance_to_goal", None)
+        episode_stats['goal_reached'] = info.get("goal_reached", False)
         
         # After episode ends, handle bootstrapping for truncated episodes
         if truncated and not terminated:

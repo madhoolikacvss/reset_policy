@@ -26,6 +26,9 @@ class MotorConfig:
         if self.vertical_pair is None:
             self.vertical_pair = [18, 19]    # X-axis (up/down)
 
+        
+
+
 @dataclass
 class DynamixelConfig:
     """Dynamixel communication and control settings."""
@@ -117,6 +120,8 @@ class EnvironmentConfig:
     # Goal settings
     goal_success_threshold: float = 0.03  # 3 cm - success when within this distance
     goal_margin: float = 0.1  # 10 cm - keep goals away from edges
+    use_fixed_goals: bool = True  # If True, cycle through fixed_goals
+    fixed_goals: List = None 
     
     # Current thresholds for termination
     high_current_threshold: float = 2500.0
@@ -135,6 +140,17 @@ class EnvironmentConfig:
     
     # Grid
     cell_size_m: float = 0.01
+
+    def __post_init__(self):
+        if self.fixed_goals is None:
+            # Default fixed goals (replace with your 5 positions)
+            self.fixed_goals = [
+                (-0.134, -0.526),
+                (-0.323, -0.519),
+                (-0.142, -0.351),
+                (-0.299, -0.363),
+                (-0.222, -0.400),
+            ]
 
 @dataclass
 class TrainingConfig:
