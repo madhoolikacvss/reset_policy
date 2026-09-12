@@ -172,9 +172,6 @@ def train(env, config=config):
             episode_stats['safety_penalty'] += float(info.get("safety_penalty", 0.0))
             episode_stats['max_current'] = max(episode_stats['max_current'], float(info.get("max_current", 0.0)))
             
-            if info.get("action_modified", False):
-                episode_stats['safety_interventions'] += 1
-            
             if info.get("hardware_error", False):
                 for motor_id in info.get("hardware_error_ids", []):
                     episode_stats['hardware_error_ids'].add(int(motor_id))

@@ -56,14 +56,17 @@ class TrainingLogger:
                 writer.writerow([
                     "episode",
                     "total_reward",
-                    "coverage",
                     "steps",
                     "termination_reason",
                     "terminated",
                     "truncated",
+                    # Goal tracking
+                    "goal_x",
+                    "goal_y",
+                    "final_distance_to_goal",
+                    "goal_reached",
                     # Reward components
-                    "coverage_reward_sum",
-                    "current_reward_sum",
+                    "distance_reward_sum",
                     "current_change_penalty_sum",
                     "hardware_error_penalty_sum",
                     "tension_penalty_sum",
@@ -73,22 +76,7 @@ class TrainingLogger:
                     "safety_interventions",
                     "hardware_error",
                     "hardware_error_ids",
-                    # Safety intervention counts
-                    "current_aware_scaling_count",
-                    "temperature_high_count",
-                    "temperature_critical_count",
-                    "voltage_low_count",
-                    "voltage_critical_count",
-                    "tension_safety_count",
-                    "opposing_motors_count",
-                    "tension_too_low_count",
-                    "high_horizontal_current_count",
-                    "high_vertical_current_count",
-                    "single_motor_over_current_count",
-                    "position_limit_pull_count",
-                    "position_limit_release_count",
-                    "motor_stuck_count",
-                    # Safety penalty sums
+                    # Safety penalty sums (by reason)
                     "safety_penalty_current_aware_scaling",
                     "safety_penalty_temperature_high",
                     "safety_penalty_temperature_critical",
@@ -209,23 +197,25 @@ class TrainingLogger:
         if step_num % 10 == 0:
             self.current_motor_file.flush()
     
-    def log_episode(self, episode_num, episode_reward, info, steps, 
+    def log_episode(self, episode_num, episode_reward, info, steps,
                     terminated, truncated, episode_stats):
         """Log episode summary."""
-        safety_reasons = episode_stats.get('safety_reasons', {})
         safety_penalties = episode_stats.get('safety_penalty_by_reason', {})
         
         row = [
             episode_num,
             episode_reward,
-            info.get("coverage", np.nan),
             steps,
             info.get("termination_reason", ""),
             terminated,
             truncated,
+            # Goal tracking
+            episode_stats.get('goal_x', np.nan),
+            episode_stats.get('goal_y', np.nan),
+            episode_stats.get('final_distance_to_goal', np.nan),
+            episode_stats.get('goal_reached', False),
             # Reward components
-            episode_stats.get('coverage_reward', 0.0),
-            episode_stats.get('current_reward', 0.0),
+            episode_stats.get('distance_reward', 0.0),
             episode_stats.get('current_change_penalty', 0.0),
             episode_stats.get('hardware_error_penalty', 0.0),
             episode_stats.get('tension_penalty', 0.0),
@@ -235,21 +225,6 @@ class TrainingLogger:
             episode_stats.get('safety_interventions', 0),
             bool(episode_stats.get('hardware_error_ids', set())),
             ",".join(map(str, sorted(episode_stats.get('hardware_error_ids', set())))),
-            # Safety intervention counts
-            safety_reasons.get('current_aware_scaling', 0),
-            safety_reasons.get('temperature_high', 0),
-            safety_reasons.get('temperature_critical', 0),
-            safety_reasons.get('voltage_low', 0),
-            safety_reasons.get('voltage_critical', 0),
-            safety_reasons.get('tension_safety', 0),
-            safety_reasons.get('opposing_motors', 0),
-            safety_reasons.get('tension_too_low', 0),
-            safety_reasons.get('high_horizontal_current', 0),
-            safety_reasons.get('high_vertical_current', 0),
-            safety_reasons.get('single_motor_over_current', 0),
-            safety_reasons.get('position_limit_pull', 0),
-            safety_reasons.get('position_limit_release', 0),
-            safety_reasons.get('motor_stuck', 0),
             # Safety penalty sums
             safety_penalties.get('current_aware_scaling', 0.0),
             safety_penalties.get('temperature_high', 0.0),
