@@ -87,7 +87,7 @@ class SafetyConfig:
     temp_scale_factor: float = 0.3
     
     # Tension constraint (mA)
-    min_tension_threshold: float = 30.0
+    min_tension_threshold: float = 5.0
     
     # Single motor tension (mA)
     single_motor_tension_threshold: float = 300.0
@@ -133,10 +133,10 @@ class EnvironmentConfig:
     out_of_bound_penalty: float = -1.0
     
     # Board bounds (meters)
-    x_min: float = -0.45
-    x_max: float = -0.10
-    y_min: float = -0.74
-    y_max: float = 0.035
+    x_min: float = -0.59
+    x_max: float = -0.24
+    y_min: float = -0.10
+    y_max: float = 0.66
     
     # Grid
     cell_size_m: float = 0.01
@@ -145,11 +145,11 @@ class EnvironmentConfig:
         if self.fixed_goals is None:
             # Default fixed goals (replace with your 5 positions)
             self.fixed_goals = [
-                (-0.134, -0.526),
-                (-0.323, -0.519),
-                (-0.142, -0.351),
-                (-0.299, -0.363),
-                (-0.222, -0.400),
+                (-0.315, 0.131),
+                (-0.515, -0.413),
+                (-0.415, 0.281),
+                (-0.315, 0.413),
+                (-0.415, 0.131),
             ]
 
 @dataclass
