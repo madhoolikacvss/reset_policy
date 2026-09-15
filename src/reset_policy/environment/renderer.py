@@ -21,7 +21,7 @@ class BoardRenderer:
         board_height_cm=55,
         cell_size_cm=1,
         save_dir=None,
-        save_every_n=5,
+        save_every_n=1,
         max_saved_plots=200,
         max_trajectory_points=500,
     ):
@@ -40,7 +40,7 @@ class BoardRenderer:
         
         self.episode_count = 0
         self.step_count = 0
-        self.trajectory = []  # List of (cube_x_cm, cube_y_cm) tuples
+        self.trajectory = []
         self.saved_episodes = set()
         
         print(f"Renderer: Headless mode (saving to {self.save_dir})")
@@ -54,22 +54,69 @@ class BoardRenderer:
         self.trajectory = []
     
     def update_step(self, step, cube_x_cm, cube_y_cm):
-        """
-        Update current step and record position.
-        
-        Args:
-            cube_x_cm: X position in cm (vertical)
-            cube_y_cm: Y position in cm (horizontal)
-        """
+        """Update current step and record position."""
         self.step_count = step
         self.trajectory.append((cube_x_cm, cube_y_cm))
         
         if len(self.trajectory) > self.max_trajectory_points:
             self.trajectory = self.trajectory[::2]
     
+    def _draw_goals(self, ax, goals, current_goal_idx=None):
+        """
+        Draw fixed goals as numbered markers.
+        
+        Args:
+            ax: matplotlib axes
+            goals: list of (x_cm, y_cm) tuples
+            current_goal_idx: index of goal being attempted (highlighted)
+        """
+        for idx, (gx, gy) in enumerate(goals):
+            is_current = (current_goal_idx is not None and idx == current_goal_idx)
+            
+            # Marker style
+            color = 'magenta' if is_current else 'orange'
+            size = 250 if is_current else 150
+            edge_color = 'black'
+            zorder = 9 if is_current else 7
+            
+            # Draw marker
+            ax.scatter(
+                gx, gy,
+                s=size,
+                marker='*',
+                color=color,
+                edgecolor=edge_color,
+                linewidth=1.5,
+                zorder=zorder,
+            )
+            
+            # Draw number label
+            ax.text(
+                gx, gy,
+                str(idx + 1),
+                fontsize=11,
+                weight='bold',
+                color='black',
+                ha='center',
+                va='center',
+                zorder=zorder + 1,
+            )
+    
     def render(self, cube_x_cm, cube_y_cm, occupancy_grid=None, coverage=None, 
-               action=None, mode="human"):
-        """Render current state."""
+               action=None, mode="human", goals=None, current_goal_idx=None):
+        """
+        Render current state.
+        
+        Args:
+            cube_x_cm: Cube X position in cm (vertical)
+            cube_y_cm: Cube Y position in cm (horizontal)
+            occupancy_grid: 2D array of visit counts
+            coverage: coverage ratio (optional)
+            action: current action (optional)
+            mode: "human" or "rgb_array"
+            goals: list of (x_cm, y_cm) fixed goals to display
+            current_goal_idx: index of current goal (0-based)
+        """
         
         # Clamp for display
         cube_x_clamped = max(0, min(self.height, cube_x_cm))
@@ -88,7 +135,15 @@ class BoardRenderer:
         ax.set_aspect("equal")
         ax.set_xlabel("Y (cm) - Horizontal")
         ax.set_ylabel("X (cm) - Vertical")
-        ax.set_title(f"Episode {self.episode_count}, Step {self.step_count}")
+        
+        # Title with goal info
+        if current_goal_idx is not None:
+            ax.set_title(
+                f"Episode {self.episode_count}, Step {self.step_count} | "
+                f"Goal #{current_goal_idx + 1}"
+            )
+        else:
+            ax.set_title(f"Episode {self.episode_count}, Step {self.step_count}")
         
         # 1. Heatmap
         if occupancy_grid is not None and occupancy_grid.size > 0:
@@ -111,8 +166,8 @@ class BoardRenderer:
         
         # 2. Trajectory
         if len(self.trajectory) > 1:
-            traj_x = [p[0] for p in self.trajectory]  # Vertical
-            traj_y = [p[1] for p in self.trajectory]  # Horizontal
+            traj_x = [p[0] for p in self.trajectory]
+            traj_y = [p[1] for p in self.trajectory]
             
             ax.plot(
                 traj_y, traj_x,
@@ -133,7 +188,11 @@ class BoardRenderer:
                 label='Start',
             )
         
-        # 3. Current position
+        # 3. Goals (NEW)
+        if goals is not None and len(goals) > 0:
+            self._draw_goals(ax, goals, current_goal_idx)
+        
+        # 4. Current cube position
         ax.scatter(
             cube_y_clamped, cube_x_clamped,
             s=300,
@@ -145,7 +204,7 @@ class BoardRenderer:
             label='Current',
         )
         
-        # 4. Info panel
+        # 5. Info panel
         info_lines = []
         if coverage is not None:
             info_lines.append(f"Coverage: {coverage:.2%}")
@@ -165,10 +224,10 @@ class BoardRenderer:
                 fontsize=10,
             )
         
-        # 5. Legend
+        # 6. Legend
         ax.legend(loc='upper right')
         
-        # 6. SAVE SECTION (WAS MISSING!)
+        # 7. Save plot
         saved_path = None
         should_save = (
             self.episode_count % self.save_every_n == 0 and
@@ -193,19 +252,22 @@ class BoardRenderer:
         
         return saved_path
     
-    def save_final_render(self, occupancy_grid=None, coverage=None):
+    def save_final_render(self, occupancy_grid=None, coverage=None, 
+                          goals=None, current_goal_idx=None):
         """Save final render at episode end."""
         if not self.trajectory:
             print("[RENDER] No trajectory to render")
             return None
         
-        last_x, last_y = self.trajectory[-1]  # Unpack (x, y)
+        last_x, last_y = self.trajectory[-1]
         
         return self.render(
             cube_x_cm=last_x,
             cube_y_cm=last_y,
             occupancy_grid=occupancy_grid,
             coverage=coverage,
+            goals=goals,
+            current_goal_idx=current_goal_idx,
         )
     
     def _cleanup_old_plots(self):

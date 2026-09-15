@@ -74,10 +74,10 @@ class CubeTracker:
         x, y, z, roll, pitch, yaw = pose
 
 
-        print("=============FROM cube tracker get state=========== ")
-        print("----  positions from get_state()------")
-        print("x: ", x)
-        print("y: ", y)
+        # print("=============FROM cube tracker get state=========== ")
+        # print("----  positions from get_state()------")
+        # print("x: ", x)
+        # print("y: ", y)
 
 
         return CubeState(

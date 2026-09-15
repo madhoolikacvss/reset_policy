@@ -158,7 +158,18 @@ class ResetPolicyEnv(gym.Env):
             self.reposition_cube_to_center()
             self.needs_reposition = False
             self._sync_targets_with_actual_positions()
-        
+
+        else:
+            # Get current position
+            result = self.obs_builder.get_observation_result()
+            if result.observation is None:
+                raise RuntimeError(f"Cannot get cube position during reset:{result.error_message}")
+            
+            x, y = result.observation.cube_x, result.observation.cube_y
+            print(f"Current position: ({x:.3f}, {y:.3f})")
+            print(f"Board bounds: x=[{self.grid.x_min:.3f}, {self.grid.x_max:.3f}], "
+                    f"y=[{self.grid.y_min:.3f}, {self.grid.y_max:.3f}]")
+
         # Sample new goal
         x_goal, y_goal = self.sample_goal()
         self.goal_position = (x_goal, y_goal)
@@ -264,6 +275,9 @@ class ResetPolicyEnv(gym.Env):
         # Calculate distance to goal
         x_goal, y_goal = self.goal_position
         distance_to_goal = np.sqrt((x - x_goal)**2 + (y - y_goal)**2)
+        print("==========goal and obs reading from env============")
+        print("x, y are: ",x, y)
+        print("goal is: ", x_goal, y_goal)
         
         # Compute reward (goal-distance based from reward.py)
         reward_info = self.reward_fn.compute(
@@ -613,7 +627,7 @@ class ResetPolicyEnv(gym.Env):
                 print(f"Pulling Motor 16 to move -Y (left)")
                 return 16
     
-    def _pull_motor_to_reposition(self, motor_to_pull, steps=10, step_delta=50):
+    def _pull_motor_to_reposition(self, motor_to_pull, steps=20, step_delta=50):
         """Execute repositioning pull."""
         # Release other motors
         print(f"Releasing other motors (except Motor {motor_to_pull})...")

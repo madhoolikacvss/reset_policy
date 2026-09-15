@@ -211,44 +211,44 @@ class DynamixelExecutor:
         """Read 4 bytes (signed)."""
         return self._read_raw(motor_id, address, 4, signed=True)
 
-    # Telemetry    
+
     def _get_motor_telemetry(self, motor_id):
         """Read complete telemetry snapshot for one motor."""
         # Check if port is available
         try:
             if not hasattr(self, 'port') or self.port is None or not self.port.is_open:
                 return {
-                    "position": None,
-                    "current": None,
-                    "voltage": None,
-                    "temperature": None,
-                    "torque": None,
-                    "pwm": None,
-                    "velocity": None,
-                    "hardware_status": None,
+                    "position": None, "current": None, "voltage": None,
+                    "temperature": None, "torque": None, "pwm": None,
+                    "velocity": None, "hardware_status": None,
                 }
-        except:
+        except Exception:
             return {
-                "position": None,
-                "current": None,
-                "voltage": None,
-                "temperature": None,
-                "torque": None,
-                "pwm": None,
-                "velocity": None,
-                "hardware_status": None,
+                "position": None, "current": None, "voltage": None,
+                "temperature": None, "torque": None, "pwm": None,
+                "velocity": None, "hardware_status": None,
             }
-        
+    
+        # Read each value ONCE
+        position = self._read4_raw(motor_id, ADDR_PRESENT_POSITION)
+        current = self._read_raw(motor_id, ADDR_PRESENT_CURRENT, 2, signed=True)
+        voltage_raw = self._read_raw(motor_id, ADDR_PRESENT_INPUT_VOLTAGE, 2)
+        voltage = voltage_raw * 0.1 if voltage_raw is not None else None
+        temperature = self._read1_raw(motor_id, ADDR_PRESENT_TEMPERATURE)
+        torque = self._read1_raw(motor_id, ADDR_TORQUE_ENABLE)
+        pwm = self._read_raw(motor_id, ADDR_PRESENT_PWM, 2, signed=True)
+        velocity = self._read_raw(motor_id, ADDR_PRESENT_VELOCITY, 4, signed=True)
+        hardware_status = self._read1_raw(motor_id, ADDR_HARDWARE_ERROR_STATUS)
+    
         return {
-            "position": self._read4_raw(motor_id, ADDR_PRESENT_POSITION),
-            "current": self._read_raw(motor_id, ADDR_PRESENT_CURRENT, 2, signed=True),
-            "voltage": self._read_raw(motor_id, ADDR_PRESENT_INPUT_VOLTAGE, 2) * 0.1 
-                    if self._read_raw(motor_id, ADDR_PRESENT_INPUT_VOLTAGE, 2) is not None else None,
-            "temperature": self._read1_raw(motor_id, ADDR_PRESENT_TEMPERATURE),
-            "torque": self._read1_raw(motor_id, ADDR_TORQUE_ENABLE),
-            "pwm": self._read_raw(motor_id, ADDR_PRESENT_PWM, 2, signed=True),
-            "velocity": self._read_raw(motor_id, ADDR_PRESENT_VELOCITY, 4, signed=True),
-            "hardware_status": self._read1_raw(motor_id, ADDR_HARDWARE_ERROR_STATUS),
+            "position": position,
+            "current": current,
+            "voltage": voltage,
+            "temperature": temperature,
+            "torque": torque,
+            "pwm": pwm,
+            "velocity": velocity,
+            "hardware_status": hardware_status,
         }
 
     # High-level read operations    

@@ -40,7 +40,7 @@ class SafetyReason(Enum):
     TENSION_SAFETY = "tension_safety"
     TEMPERATURE_HIGH = "temperature_high"
     TEMPERATURE_CRITICAL = "temperature_critical"
-    MOTOR_STUCK = "motor_stuck"  # ADD THIS
+    MOTOR_STUCK = "motor_stuck"
 
 
 @dataclass
@@ -53,7 +53,7 @@ class SafetyResult:
     detail: str = ""
     affected_motors: List[int] = None
     pre_filter_metrics: Dict[str, float] = None
-    
+
     def __post_init__(self):
         if self.affected_motors is None:
             self.affected_motors = []
@@ -63,56 +63,57 @@ class SafetyResult:
 
 class SafetyFilter:
     """Safety filter for RL actions."""
-    
+
     def __init__(self, motor_ids: List[int] = None, **kwargs):
         """Initialize safety filter with config values."""
         # Motor setup
         self.motor_ids = motor_ids if motor_ids is not None else config.motor.motor_ids
         self.num_motors = len(self.motor_ids)
-        
+
         # Motor pairs from config
         self.pair_horizontal = kwargs.get('pair_horizontal', config.motor.horizontal_pair)
         self.pair_vertical = kwargs.get('pair_vertical', config.motor.vertical_pair)
-        
+
         # Get indices for pairs
         self.h_idx = [self.motor_ids.index(m) for m in self.pair_horizontal]
         self.v_idx = [self.motor_ids.index(m) for m in self.pair_vertical]
-        
+
         # Current thresholds
         self.max_pair_current = kwargs.get('max_pair_current', config.safety.max_pair_current)
         self.max_single_current = kwargs.get('max_single_current', config.safety.max_single_current)
-        
+
         # Position limits
         self.max_position = kwargs.get('max_position', config.safety.max_position)
-        
+
         # Voltage thresholds
         self.min_voltage = kwargs.get('min_voltage', config.safety.min_voltage)
         self.critical_voltage = kwargs.get('critical_voltage', config.safety.critical_voltage)
-        
+
         # Action scaling factors
         self.current_scale_factor = kwargs.get('current_scale_factor', config.safety.current_scale_factor)
         self.position_scale_factor = kwargs.get('position_scale_factor', config.safety.position_scale_factor)
         self.voltage_scale_factor = kwargs.get('voltage_scale_factor', config.safety.voltage_scale_factor)
-        
+
         # Temperature thresholds
         self.temp_threshold = kwargs.get('temp_threshold', config.safety.temp_threshold)
         self.temp_critical = kwargs.get('temp_critical', config.safety.temp_critical)
         self.temp_scale_factor = kwargs.get('temp_scale_factor', config.safety.temp_scale_factor)
-        
+
         # Current-aware scaling
+        self.decent_load_threshold = kwargs.get('decent_load_threshold', config.safety.decent_load_threshold)
         self.heavy_load_threshold = kwargs.get('heavy_load_threshold', config.safety.heavy_load_threshold)
         self.critical_load_threshold = kwargs.get('critical_load_threshold', config.safety.critical_load_threshold)
         self.heavy_load_scale = kwargs.get('heavy_load_scale', config.safety.heavy_load_scale)
         self.moderate_load_scale = kwargs.get('moderate_load_scale', config.safety.moderate_load_scale)
-        
+
         # Tension constraint
         self.min_tension_threshold = kwargs.get('min_tension_threshold', config.safety.min_tension_threshold)
-        
+
         # Single motor tension
         self.single_motor_tension_threshold = kwargs.get('single_motor_tension_threshold', config.safety.single_motor_tension_threshold)
         self.single_motor_tension_high = kwargs.get('single_motor_tension_high', config.safety.single_motor_tension_high)
         self.single_motor_tension_critical = kwargs.get('single_motor_tension_critical', config.safety.single_motor_tension_critical)
-        
+
         # Feature flags
         self.enable_current_safety = kwargs.get('enable_current_safety', config.safety.enable_current_safety)
         self.enable_position_safety = kwargs.get('enable_position_safety', config.safety.enable_position_safety)
@@ -122,20 +123,20 @@ class SafetyFilter:
         self.enable_tension_constraint = kwargs.get('enable_tension_constraint', config.safety.enable_tension_constraint)
         self.enable_temperature_safety = kwargs.get('enable_temperature_safety', config.safety.enable_temperature_safety)
         self.enable_single_motor_tension = kwargs.get('enable_single_motor_tension', config.safety.enable_single_motor_tension)
-        self.enable_stuck_motor_safety = kwargs.get('enable_stuck_motor_safety', True)  # ADD THIS
-        
+        self.enable_stuck_motor_safety = kwargs.get('enable_stuck_motor_safety', True)
+        self.enable_slack_motor_restore = kwargs.get('enable_slack_motor_restore', True)
+
         # Logging
         self.log_interventions = kwargs.get('log_interventions', config.safety.log_interventions)
-        
+
         # Statistics
         self.intervention_count = 0
         self.intervention_reasons = {reason: 0 for reason in SafetyReason}
         self.last_result = None
-        self.prev_positions = None  # ADD THIS
-        
+        self.prev_positions = None
+
         # Print config summary
         self._print_config()
-
 
     def _print_config(self):
         """Print safety filter configuration."""
@@ -157,11 +158,11 @@ class SafetyFilter:
               f"temperature={self.enable_temperature_safety}, single_tension={self.enable_single_motor_tension}, "
               f"stuck_motor={self.enable_stuck_motor_safety}")
 
-    def filter(self, action, currents, positions, initial_positions, 
+    def filter(self, action, currents, positions, initial_positions,
                voltages=None, temperatures=None, action_count=0):
         """Apply safety filter to action."""
         raw_action = action.copy()
-        
+
         result = SafetyResult(
             safe_action=action.copy(),
             raw_action=raw_action,
@@ -184,10 +185,10 @@ class SafetyFilter:
                 result.detail = detail
                 result.affected_motors = affected
                 self._log_intervention(reason, detail, raw_action, action)
-        
+
         # Apply each safety layer in order
         safety_layers = [
-            (self.enable_current_aware_safety and currents is not None, 
+            (self.enable_current_aware_safety and currents is not None,
              self._apply_current_aware_safety, (action, currents)),
             (self.enable_temperature_safety and temperatures is not None,
              self._apply_temperature_safety, (action, temperatures)),
@@ -195,6 +196,8 @@ class SafetyFilter:
              self._apply_voltage_safety, (action, voltages)),
             (self.enable_tension_safety and currents is not None,
              self._apply_tension_safety, (action, currents)),
+            (self.enable_slack_motor_restore and currents is not None,
+             self._apply_slack_motor_restore, (action, currents)),
             (self.enable_tension_constraint and currents is not None,
              self._apply_tension_constraint, (action, currents)),
             (self.enable_current_safety and currents is not None,
@@ -202,7 +205,7 @@ class SafetyFilter:
             (self.enable_position_safety and positions is not None and initial_positions is not None,
              self._apply_position_safety, (action, positions, initial_positions)),
         ]
-        
+
         for enabled, safety_fn, args in safety_layers:
             if enabled:
                 action, modified, reason, detail, affected = safety_fn(*args)
@@ -212,32 +215,32 @@ class SafetyFilter:
                     result.detail = detail
                     result.affected_motors = affected
                     self._log_intervention(reason, detail, raw_action, action)
-        
+
         # Update prev_positions after all layers
-        self.prev_positions = positions.copy() if positions is not None else None  # ADD THIS
-        
+        self.prev_positions = positions.copy() if positions is not None else None
+
         # Clamp to valid range
         action = np.clip(action, -1.0, 1.0)
         result.safe_action = action
         self.last_result = result
-        
+
         return result
-    
+
     def _apply_current_aware_safety(self, action, currents):
         """Proactively scale down actions for heavily loaded motors."""
         modified = False
         reason = None
         detail = ""
         affected = []
-        
+
         for i, motor_id in enumerate(self.motor_ids):
             current = abs(currents[i])
-            
+
             if abs(action[i]) < 0.05:
                 continue
-            
+
             # Determine scaling factor
-            if current < 200:
+            if current < self.decent_load_threshold:
                 scale = 1.0
             elif current < self.heavy_load_threshold:
                 scale = 1.0 - (current - 200) / (self.heavy_load_threshold - 200) * (1.0 - self.moderate_load_scale)
@@ -247,7 +250,7 @@ class SafetyFilter:
                 scale = max(self.heavy_load_scale, min(self.moderate_load_scale, scale))
             else:
                 scale = self.heavy_load_scale
-            
+
             # Apply scaling if pulling
             if action[i] > 0.05 and scale < 0.99:
                 action[i] *= scale
@@ -255,21 +258,49 @@ class SafetyFilter:
                 reason = SafetyReason.CURRENT_AWARE_SCALING
                 detail = f"Motor {motor_id}: {current:.0f}mA -> scale={scale:.2f}"
                 affected.append(motor_id)
-        
+
         return action, modified, reason, detail, affected
-    
+
+    def _apply_slack_motor_restore(self, action, currents):
+        """
+        Detect individual slack motors (near-zero current) and force a small pull.
+
+        Unlike _apply_tension_constraint (which checks pairs), this checks each
+        motor independently.
+        """
+        modified = False
+        reason = None
+        detail = ""
+        affected = []
+
+        SLACK_CURRENT_THRESHOLD = 10.0  # mA - below this, motor is slack
+        RESTORE_PULL_ACTION = 0.2       # small pull to restore tension
+
+        for i, motor_id in enumerate(self.motor_ids):
+            current = abs(currents[i])
+
+            # Motor is slack: near-zero current AND we're not already pulling
+            if current < SLACK_CURRENT_THRESHOLD and action[i] < RESTORE_PULL_ACTION:
+                action[i] = RESTORE_PULL_ACTION
+                modified = True
+                reason = SafetyReason.TENSION_TOO_LOW
+                detail = f"Motor {motor_id}: slack ({current:.0f}mA) -> forced pull"
+                affected.append(motor_id)
+
+        return action, modified, reason, detail, affected
+
     def _apply_temperature_safety(self, action, temperatures):
         """Scale down actions for overheating motors."""
         modified = False
         reason = None
         detail = ""
         affected = []
-        
+
         for i, motor_id in enumerate(self.motor_ids):
             temp = temperatures[i]
             if temp is None:
                 continue
-            
+
             if temp > self.temp_threshold:
                 # Use self.temp_threshold and self.temp_critical instead of hardcoded values
                 if temp >= self.temp_critical:
@@ -281,26 +312,26 @@ class SafetyFilter:
                     scale = 1.0 - (temp - self.temp_threshold) / temp_range * (1.0 - self.temp_scale_factor)
                     scale = max(self.temp_scale_factor, min(1.0, scale))
                     reason = SafetyReason.TEMPERATURE_HIGH
-                
+
                 action[i] *= scale
                 modified = True
                 detail = f"Motor {motor_id}: {temp:.0f}°C -> scale={scale:.2f}"
                 affected.append(motor_id)
-        
+
         return action, modified, reason, detail, affected
-    
+
     def _apply_voltage_safety(self, action, voltages):
         """Scale down actions when voltage is low."""
         modified = False
         reason = None
         detail = ""
         affected = []
-        
+
         for i, motor_id in enumerate(self.motor_ids):
             voltage = voltages[i]
             if voltage is None:
                 continue
-            
+
             if voltage < self.critical_voltage:
                 scale = self.voltage_scale_factor * 0.5
                 reason = SafetyReason.VOLTAGE_CRITICAL
@@ -311,41 +342,41 @@ class SafetyFilter:
                 reason = SafetyReason.VOLTAGE_LOW
             else:
                 continue
-            
+
             action[i] *= scale
             modified = True
             detail = f"Motor {motor_id}: {voltage:.1f}V -> scale={scale:.2f}"
             affected.append(motor_id)
-        
+
         return action, modified, reason, detail, affected
-      
+
     def _apply_stuck_motor_safety(self, action, currents, positions, prev_positions):
         """
         Detect when motors are stuck and force release.
-        
+
         Checks both single motors and pairs.
         """
         if prev_positions is None:
             return action, False, None, "", []
-        
+
         modified = False
         reason = None
         detail = ""
         affected = []
-        
+
         # Check each motor individually
         for i, motor_id in enumerate(self.motor_ids):
             pos_change = abs(positions[i] - prev_positions[i])
             current = abs(currents[i])
-            
+
             # Single motor stuck: high current + no movement
-            if current > 500 and pos_change < 5:
+            if current > 500 and pos_change < 5 and action[i]!=0:
                 action[i] = -0.5  # Force release
                 modified = True
                 reason = SafetyReason.MOTOR_STUCK
                 detail = f"Motor {motor_id} stuck: current={current:.0f}mA, no movement"
                 affected.append(motor_id)
-        
+
         # Also check pairs (both stuck)
         for pair_indices in [self.h_idx, self.v_idx]:
             stuck_motors = []
@@ -354,29 +385,29 @@ class SafetyFilter:
                 current = abs(currents[idx])
                 if current > 400 and pos_change < 5:
                     stuck_motors.append(idx)
-            
+
             if len(stuck_motors) == 2:
                 for idx in stuck_motors:
                     action[idx] = -0.5
                 modified = True
                 reason = SafetyReason.MOTOR_STUCK
-                detail = f"Both motors in pair stuck - forcing release"
+                detail = f"Both motors {stuck_motors} in pair stuck - forcing release"
                 affected.extend([self.motor_ids[i] for i in stuck_motors])
-        
+
         return action, modified, reason, detail, affected
-    
+
     def _apply_tension_safety(self, action, currents):
         """Prevent motors from fighting and prevent single motor overload."""
         modified = False
         reason = None
         detail = ""
         affected = []
-        
+
         # Single motor tension safety
         if self.enable_single_motor_tension:
             for i, motor_id in enumerate(self.motor_ids):
                 current = abs(currents[i])
-                
+
                 if action[i] > 0.1 and current > self.single_motor_tension_threshold:
                     if current > self.single_motor_tension_critical:
                         scale = 0.3
@@ -384,21 +415,21 @@ class SafetyFilter:
                         scale = 0.5
                     else:
                         scale = 0.7
-                    
+
                     action[i] *= scale
                     modified = True
                     reason = SafetyReason.TENSION_SAFETY
                     detail = f"Motor {motor_id}: {current:.0f}mA -> scale={scale:.2f}"
                     affected.append(motor_id)
-        
+
         # Opposing motors safety (check each pair)
-        for pair_indices, pair_motors in [(self.h_idx, self.pair_horizontal), 
+        for pair_indices, pair_motors in [(self.h_idx, self.pair_horizontal),
                                           (self.v_idx, self.pair_vertical)]:
             a0 = action[pair_indices[0]]
             a1 = action[pair_indices[1]]
             c0 = abs(currents[pair_indices[0]])
             c1 = abs(currents[pair_indices[1]])
-            
+
             if a0 > 0.3 and a1 > 0.3 and c0 > 100 and c1 > 100:
                 # Reduce the larger action
                 if abs(a0) > abs(a1):
@@ -407,25 +438,25 @@ class SafetyFilter:
                 else:
                     action[pair_indices[1]] *= 0.5
                     affected.append(pair_motors[1])
-                
+
                 modified = True
                 reason = SafetyReason.OPPOSING_MOTORS
                 detail = f"Motors {pair_motors[0]} and {pair_motors[1]} both pulling"
-        
+
         return action, modified, reason, detail, affected
-    
+
     def _apply_tension_constraint(self, action, currents):
         """Prevent slack strings by maintaining minimum tension."""
         modified = False
         reason = None
         detail = ""
         affected = []
-        
+
         # Check each pair
-        for pair_indices, pair_motors in [(self.h_idx, self.pair_horizontal), 
+        for pair_indices, pair_motors in [(self.h_idx, self.pair_horizontal),
                                           (self.v_idx, self.pair_vertical)]:
             tension = abs(currents[pair_indices[0]]) + abs(currents[pair_indices[1]])
-            
+
             if tension < self.min_tension_threshold:
                 # Both releasing - prevent slack
                 if action[pair_indices[0]] < 0 and action[pair_indices[1]] < 0:
@@ -435,20 +466,20 @@ class SafetyFilter:
                     reason = SafetyReason.TENSION_TOO_LOW
                     detail = f"Pair {pair_motors} tension {tension:.0f}mA < {self.min_tension_threshold}mA"
                     affected.extend(pair_motors)
-        
+
         return action, modified, reason, detail, affected
-    
+
     def _apply_current_safety(self, action, currents):
         """Enforce hard limits on currents."""
         modified = False
         reason = None
         detail = ""
         affected = []
-        
+
         # Check pair currents
         h_current = abs(currents[self.h_idx[0]]) + abs(currents[self.h_idx[1]])
         v_current = abs(currents[self.v_idx[0]]) + abs(currents[self.v_idx[1]])
-        
+
         if h_current > self.max_pair_current:
             action[self.h_idx[0]] *= self.current_scale_factor
             action[self.h_idx[1]] *= self.current_scale_factor
@@ -463,7 +494,7 @@ class SafetyFilter:
             reason = SafetyReason.HIGH_VERTICAL_CURRENT
             detail = f"Vertical current {v_current:.1f}mA > {self.max_pair_current}mA"
             affected.extend(self.pair_vertical)
-        
+
         # Check single motor over-current
         if not modified:
             for i, motor_id in enumerate(self.motor_ids):
@@ -473,19 +504,19 @@ class SafetyFilter:
                     reason = SafetyReason.SINGLE_MOTOR_OVER_CURRENT
                     detail = f"Motor {motor_id}: {abs(currents[i]):.1f}mA > {self.max_single_current}mA"
                     affected.append(motor_id)
-        
+
         return action, modified, reason, detail, affected
-    
+
     def _apply_position_safety(self, action, positions, initial_positions):
         """Prevent motors from hitting position limits."""
         modified = False
         reason = None
         detail = ""
         affected = []
-        
+
         for i, motor_id in enumerate(self.motor_ids):
             delta = positions[i] - initial_positions[i]
-            
+
             # Near upper limit and pulling
             if delta > self.max_position * 0.8 and action[i] > 0:
                 scale = max(0.1, 1.0 - (delta - self.max_position * 0.8) / (self.max_position * 0.2))
@@ -494,7 +525,7 @@ class SafetyFilter:
                 reason = SafetyReason.POSITION_LIMIT_PULL
                 detail = f"Motor {motor_id}: {delta:.0f} ticks near upper limit"
                 affected.append(motor_id)
-            
+
             # Near lower limit and releasing
             elif delta < -self.max_position * 0.8 and action[i] < 0:
                 scale = max(0.1, 1.0 - (abs(delta) - self.max_position * 0.8) / (self.max_position * 0.2))
@@ -503,24 +534,24 @@ class SafetyFilter:
                 reason = SafetyReason.POSITION_LIMIT_RELEASE
                 detail = f"Motor {motor_id}: {delta:.0f} ticks near lower limit"
                 affected.append(motor_id)
-        
+
         return action, modified, reason, detail, affected
-    
+
     def _log_intervention(self, reason, detail, raw_action, safe_action):
         """Log intervention."""
         if not self.log_interventions:
             return
-        
+
         self.intervention_count += 1
         self.intervention_reasons[reason] += 1
-        
+
         print(f"\n[SAFETY INTERVENTION #{self.intervention_count}]")
         print(f"  Reason: {reason.value}")
         print(f"  Detail: {detail}")
         print(f"  Raw action: {raw_action}")
         print(f"  Safe action: {safe_action}")
         print(f"  Modification: {safe_action - raw_action}")
-    
+
     def get_stats(self):
         """Get intervention statistics."""
         return {
@@ -531,4 +562,3 @@ class SafetyFilter:
             "last_reason": self.last_result.reason.value if self.last_result else None,
             "last_modified": self.last_result.modified if self.last_result else False,
         }
-

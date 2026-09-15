@@ -11,6 +11,7 @@ import numpy as np
 
 @dataclasses.dataclass(frozen=True)
 class CameraConfig:
+    video_device: str = "310643060553" #"/dev/video4"
     external_serial: str = "144223023540"
     # wrist_device: str = "/dev/video10"
     width: int = 1280

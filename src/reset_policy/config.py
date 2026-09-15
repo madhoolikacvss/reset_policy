@@ -67,6 +67,7 @@ class SafetyConfig:
     max_single_current: float = 600.0
     
     # Current-aware scaling
+    decent_load_threshold: float = 300.0
     heavy_load_threshold: float = 400.0
     critical_load_threshold: float = 700.0
     heavy_load_scale: float = 0.3
@@ -87,7 +88,7 @@ class SafetyConfig:
     temp_scale_factor: float = 0.3
     
     # Tension constraint (mA)
-    min_tension_threshold: float = 5.0
+    min_tension_threshold: float = 5
     
     # Single motor tension (mA)
     single_motor_tension_threshold: float = 300.0
@@ -105,8 +106,9 @@ class SafetyConfig:
     enable_current_aware_safety: bool = True
     enable_tension_constraint: bool = True
     enable_temperature_safety: bool = True
-    enable_single_motor_tension: bool = False
-    enable_stuck_motor_safety: bool = True  # Uncommented
+    enable_single_motor_tension: bool = True
+    enable_slack_motor_restore: bool = True
+    enable_stuck_motor_safety: bool = True  
     
     # Logging
     log_interventions: bool = True
@@ -118,7 +120,7 @@ class EnvironmentConfig:
     max_steps: int = 200
     
     # Goal settings
-    goal_success_threshold: float = 0.03  # 3 cm - success when within this distance
+    goal_success_threshold: float = 0.005 #cm - success when within this distance
     goal_margin: float = 0.1  # 10 cm - keep goals away from edges
     use_fixed_goals: bool = True  # If True, cycle through fixed_goals
     fixed_goals: List = None 
@@ -133,10 +135,10 @@ class EnvironmentConfig:
     out_of_bound_penalty: float = -1.0
     
     # Board bounds (meters)
-    x_min: float = -0.59
-    x_max: float = -0.24
-    y_min: float = -0.10
-    y_max: float = 0.66
+    x_min: float = -0.5
+    x_max: float = -0.07
+    y_min: float = -0.71
+    y_max: float = -0.06
     
     # Grid
     cell_size_m: float = 0.01
@@ -145,11 +147,11 @@ class EnvironmentConfig:
         if self.fixed_goals is None:
             # Default fixed goals (replace with your 5 positions)
             self.fixed_goals = [
-                (-0.315, 0.131),
-                (-0.515, -0.413),
-                (-0.415, 0.281),
-                (-0.315, 0.413),
-                (-0.415, 0.131),
+                (-0.119, -0.528),
+                (-0.296, -0.366),
+                (-0.225, -0.427),
+                (-0.365, -0.488),
+                (-0.142, -0.347),
             ]
 
 @dataclass
@@ -157,7 +159,7 @@ class TrainingConfig:
     """PPO training settings."""
     episodes: int = 1000
     save_every: int = 1
-    render_every: int = 5
+    render_every: int = 1
     min_steps_before_update: int = 50
     max_buffer_size: int = 500
     device: str = "cuda" if __import__('torch').cuda.is_available() else "cpu"
