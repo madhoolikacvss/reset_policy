@@ -117,7 +117,7 @@ class SafetyConfig:
 class EnvironmentConfig:
     """Environment and training settings."""
     # Episode settings
-    max_steps: int = 200
+    max_steps: int = 400
     
     # Goal settings
     goal_success_threshold: float = 0.005 #cm - success when within this distance
