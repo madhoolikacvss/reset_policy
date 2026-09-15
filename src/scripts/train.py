@@ -15,6 +15,10 @@ from reset_policy.rl.rollout_buffer import RolloutBuffer
 from reset_policy.rl.ppo import PPO
 from reset_policy.config import config
 from reset_policy.logging.logger import logger
+from reset_policy.logging.video_recorder import (
+    EpisodeVideoRecorder,
+    RECORD_VIDEO,
+)
 
 
 def train(env, config=config):
@@ -70,10 +74,26 @@ def train(env, config=config):
                 print(f"    Motor {motor_id}: {pos} (initial: {initial})")
         
         print("  Motor reset complete\n")
+
+    video_recorder = None
+    if RECORD_VIDEO:
+        try:
+            video_recorder = EpisodeVideoRecorder()
+            print(f"[VIDEO] Recorder initialized (serial={video_recorder.serial})")
+        except Exception as e:
+            print(f"[VIDEO] WARNING: Could not initialize video recorder: {e}")
+            video_recorder = None
     
     for episode in range(start_episode, config.training.episodes):
         # Start episode logging
         logger.start_episode(episode + 1)
+        should_record = (
+            video_recorder is not None and
+            (episode + 1) % config.training.save_every == 0
+        )
+        if should_record:
+            video_recorder.start_episode(episode + 1)
+
         
         state, _ = env.reset(options={'episode_num': episode + 1})
         episode_reward = 0.0
@@ -117,6 +137,9 @@ def train(env, config=config):
 
             action_np = action.cpu().numpy().astype(np.float32)
             next_state, reward, terminated, truncated, info = env.step(action_np)
+
+            if should_record:
+                video_recorder.capture_frame()
 
             if info.get("action_modified", False):
                 episode_stats['safety_interventions'] += 1
@@ -189,7 +212,9 @@ def train(env, config=config):
             with torch.no_grad():
                 _, _, last_value = actor_critic.act(state_tensor)
             rollout_buffer.update_last_bootstrap_value(last_value)
-        
+
+        if should_record:
+            video_recorder.end_episode()
         # Log episode summary
         logger.log_episode(
             episode_num=episode + 1,
@@ -230,23 +255,30 @@ def train(env, config=config):
               f"Safety: {episode_stats['safety_interventions']} | "
               f"Reason: {info.get('termination_reason', 'unknown')}")
         
-        # Save render
-        # if hasattr(env, 'renderer') and env.renderer is not None:
-        #     env.renderer.save_final_render(
-        #         env.grid.as_numpy(),
-        #         env.grid.coverage(),
-        #     )
         if hasattr(env, 'renderer') and env.renderer is not None:
-            # Get last observation for cube position
             if env.last_valid_observation is not None:
                 cube_x_cm = (env.last_valid_observation.cube_x - env.grid.x_min) * 100
                 cube_y_cm = (env.last_valid_observation.cube_y - env.grid.y_min) * 100
+                
+                # Convert goals from meters (board frame) to cm (renderer frame)
+                goals_cm = [
+                    (
+                        (gx - env.grid.x_min) * 100,  # X in cm
+                        (gy - env.grid.y_min) * 100,  # Y in cm
+                    )
+                    for gx, gy in config.environment.fixed_goals
+                ]
+                
+                # Current goal index (0-based)
+                current_goal_idx = (episode) % len(config.environment.fixed_goals)
                 
                 env.renderer.render(
                     cube_x_cm=cube_x_cm,
                     cube_y_cm=cube_y_cm,
                     occupancy_grid=env.grid.as_numpy(),
                     coverage=env.grid.coverage(),
+                    goals=goals_cm,
+                    current_goal_idx=current_goal_idx,
                 )
         # Checkpoint
         if (episode + 1) % config.training.save_every == 0:
@@ -258,7 +290,12 @@ def train(env, config=config):
                 "steps_since_update": steps_since_update,
             }, checkpoint_path)
             print(f"Saved checkpoint: {checkpoint_path}")
-    
+    # Close video recorder
+    if video_recorder is not None:
+        video_recorder.close()
+        print("[VIDEO] Video recorder closed")
+
+
     # Final checkpoint
     final_path = config.checkpoint_dir / "ppo_final.pth"
     torch.save({
