@@ -288,10 +288,15 @@ class ResetPolicyEnv(gym.Env):
             motor_currents=observation.motor_currents,
             hardware_error=False,
         )
-        reward = reward_info.total + out_of_bound_penalty
+        reward = reward_info.total 
+        if distance_to_goal < self.goal_success_threshold:
+            reward += 1.0  # Bonus for reaching goal
+
+        reward = np.clip(reward, 0, 1.0)
         
         # Apply safety penalty
-        safety_penalty = self._compute_safety_penalty(safety_info)
+        safety_penalty = self._compute_safety_penalty(safety_info) + out_of_bound_penalty
+        safety_penalty = np.clip(safety_penalty, -1.0, 0.0)
         reward += safety_penalty
         
         max_current = max(abs(float(i)) for i in observation.motor_currents)

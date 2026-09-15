@@ -129,7 +129,7 @@ class EnvironmentConfig:
     high_current_threshold: float = 2500.0
     
     # Safety penalty
-    safety_penalty_weight: float = 0.7
+    safety_penalty_weight: float = 0.4
     
     # Out of bounds penalty
     out_of_bound_penalty: float = -1.0
@@ -145,13 +145,13 @@ class EnvironmentConfig:
 
     def __post_init__(self):
         if self.fixed_goals is None:
-            # Default fixed goals (replace with your 5 positions)
+            # Default fixed goals
             self.fixed_goals = [
                 (-0.119, -0.528),
-                (-0.296, -0.366),
-                (-0.225, -0.427),
-                (-0.365, -0.488),
-                (-0.142, -0.347),
+                # (-0.296, -0.366),
+                # (-0.225, -0.427),
+                # (-0.365, -0.488),
+                # (-0.142, -0.347),
             ]
 
 @dataclass
