@@ -141,7 +141,7 @@ class ResetPolicyEnv(gym.Env):
         time.sleep(0.5)
         
         print("\n================ ENV RESET ================")
-        self.reward_fn.prev_currents = None
+        self.reward_fn.reset()
         if self.renderer is not None:
             self.renderer.update_episode(self.episode_count)
         
@@ -293,10 +293,8 @@ class ResetPolicyEnv(gym.Env):
             hardware_error=False,
         )
         reward = reward_info.total 
-        if distance_to_goal < self.goal_success_threshold:
-            reward += 1.0  # Bonus for reaching goal
-
-        reward = np.clip(reward, 0, 1.0)
+        # if distance_to_goal < self.goal_success_threshold:
+        #     reward += 1.0  # Bonus for reaching goal
         
         # Apply safety penalty
         safety_penalty = self._compute_safety_penalty(safety_info) + out_of_bound_penalty
@@ -316,9 +314,9 @@ class ResetPolicyEnv(gym.Env):
         elif out_of_bounds:
             terminated = True
             termination_reason = "out_of_bounds"
-        elif distance_to_goal < self.goal_success_threshold:
-            terminated = True
-            termination_reason = "goal_reached"
+        # elif distance_to_goal < self.goal_success_threshold:
+        #     terminated = True
+        #     termination_reason = "goal_reached"
         elif self.step_count >= self.max_steps:
             truncated = True
             termination_reason = "max_steps"
@@ -328,10 +326,13 @@ class ResetPolicyEnv(gym.Env):
             "distance_to_goal": distance_to_goal,
             "goal_position": (x_goal, y_goal),
             "cube_position": (x, y),
+            "vx_actual": reward_info.vx_actual,
+            "vy_actual": reward_info.vy_actual,
+            "v_error": reward_info.v_error,
             "goal_reached": distance_to_goal < self.goal_success_threshold,
             "steps": self.step_count,
             "visits": visits,
-            "distance_reward": reward_info.distance_reward,
+            "velocity_reward": reward_info.velocity_reward,
             "current_change_penalty": reward_info.current_change_penalty,
             "hardware_error_penalty": reward_info.hardware_error_penalty,
             "tension_penalty": reward_info.tension_penalty,
@@ -497,7 +498,10 @@ class ResetPolicyEnv(gym.Env):
             "goal_position": (x_goal, y_goal),
             "cube_position": (observation.cube_x, observation.cube_y),
             "goal_reached": False,
-            "distance_reward": reward_info.distance_reward,
+            "velocity_reward": reward_info.velocity_reward,
+            "vx_actual": reward_info.vx_actual,
+            "vy_actual": reward_info.vy_actual,
+            "v_error": reward_info.v_error,
             "current_change_penalty": reward_info.current_change_penalty,
             "hardware_error_penalty": reward_info.hardware_error_penalty,
             "tension_penalty": reward_info.tension_penalty,
@@ -547,7 +551,10 @@ class ResetPolicyEnv(gym.Env):
             "goal_position": (x_goal, y_goal),
             "cube_position": (observation.cube_x, observation.cube_y),
             "goal_reached": False,
-            "distance_reward": reward_info.distance_reward,
+            "velocity_reward": reward_info.velocity_reward,
+            "vx_actual": reward_info.vx_actual,
+            "vy_actual": reward_info.vy_actual,
+            "v_error": reward_info.v_error,
             "current_change_penalty": reward_info.current_change_penalty,
             "hardware_error_penalty": reward_info.hardware_error_penalty,
             "tension_penalty": reward_info.tension_penalty,

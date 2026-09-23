@@ -104,7 +104,7 @@ def train(env, config=config):
         
         # Episode stats
         episode_stats = {
-            'distance_reward': 0.0,
+            'velocity_reward': 0.0,
             'current_change_penalty': 0.0,
             'hardware_error_penalty': 0.0,
             'tension_penalty': 0.0,
@@ -129,51 +129,67 @@ def train(env, config=config):
         goal_reached_this_episode = False
         while not (terminated or truncated):
             state_tensor = torch.tensor(state, dtype=torch.float32, device=config.training.device)
-            
+
             with torch.no_grad():
                 action, log_prob, value = actor_critic.act(state_tensor)
-            
+
             positions_before = env.executor.read_positions()
             targets_before = [env.executor.targets.get(m, None) for m in env.executor.motor_ids]
 
             action_np = action.cpu().numpy().astype(np.float32)
+            obs_before = state
             next_state, reward, terminated, truncated, info = env.step(action_np)
+
+            # --- Capture cube/goal for logging (output of this step) ---
+            cube_pos = info.get("cube_position", (None, None))
+            goal_pos = info.get("goal_position", (None, None))
+
+            # --- Build observation dict (what the policy saw BEFORE the action) ---
+            obs_data = {
+                'cube_x': cube_pos[0],
+                'cube_y': cube_pos[1],
+                'goal_x': goal_pos[0],
+                'goal_y': goal_pos[1],
+                'vx_actual': info.get('vx_actual'),
+                'vy_actual': info.get('vy_actual'),
+                'v_error': info.get('v_error'),
+                'obs': obs_before.tolist(),
+                'actions': action_np.tolist(),
+            }
+
+            # --- Capture post-step motor state (for motor_data) ---
+            positions_after = env.executor.read_positions()
+            targets_after = [env.executor.targets.get(m, None) for m in env.executor.motor_ids]
+
+            motor_data = {
+                'targets': targets_after if targets_after else targets_before,
+                'positions': positions_after if positions_after else positions_before,
+                'currents': info.get('motor_currents', [None] * 4),
+                'voltages': info.get('motor_voltages', [None] * 4),
+                'temperatures': info.get('motor_temperatures', [None] * 4),
+                'actions': action_np.tolist(),
+            }
+
+            # --- Single logging call with both dicts ---
+            logger.log_step(
+                step_num=steps + 1,
+                action_count=env.executor.action_count if hasattr(env, 'executor') else 0,
+                motor_data=motor_data,
+                obs_data=obs_data,
+            )
 
             if should_record:
                 video_recorder.capture_frame()
 
             if info.get("action_modified", False):
                 episode_stats['safety_interventions'] += 1
-                
                 reason = info.get("safety_reason", "unknown")
                 safety_penalty = info.get("safety_penalty", 0.0)
-                
-                # Track counts
                 episode_stats['safety_reasons'][reason] = episode_stats['safety_reasons'].get(reason, 0) + 1
-                
-                # Track penalty sums
-                episode_stats['safety_penalty_by_reason'][reason] = episode_stats['safety_penalty_by_reason'].get(reason, 0.0) + safety_penalty
+                episode_stats['safety_penalty_by_reason'][reason] = (
+                    episode_stats['safety_penalty_by_reason'].get(reason, 0.0) + safety_penalty
+                )
 
-                
-            positions_after = env.executor.read_positions()
-            targets_after = [env.executor.targets.get(m, None) for m in env.executor.motor_ids]
-            
-            # Log motor data for this step
-            motor_data = {
-                'targets': targets_after if targets_after else targets_before,
-                'positions': positions_after if positions_after else positions_before,
-                'currents': info.get('motor_currents', [None]*4),
-                'voltages': info.get('motor_voltages', [None]*4),
-                'temperatures': info.get('motor_temperatures', [None]*4),
-                'actions': action_np.tolist(),
-            }
-
-            logger.log_step(
-                step_num=steps + 1,
-                action_count=env.executor.action_count if hasattr(env, 'executor') else 0,
-                motor_data=motor_data,
-            )
-            
             rollout_buffer.add(
                 state=state_tensor,
                 action=action.detach(),
@@ -183,13 +199,12 @@ def train(env, config=config):
                 log_prob=log_prob.detach(),
                 bootstrap_value=None,
             )
-            
             episode_reward += float(reward)
             steps += 1
             steps_since_update += 1
             
             # Update stats
-            episode_stats['distance_reward'] += float(info.get("distance_reward", 0.0))
+            episode_stats['velocity_reward'] += float(info.get("velocity_reward", 0.0))
             episode_stats['current_change_penalty'] += float(info.get("current_change_penalty", 0.0))
             episode_stats['hardware_error_penalty'] += float(info.get("hardware_error_penalty", 0.0))
             episode_stats['tension_penalty'] += float(info.get("tension_penalty", 0.0))
@@ -228,6 +243,8 @@ def train(env, config=config):
             #     return actor_critic
             
             state = next_state
+        if info.get("termination_reason") == "goal_reached":
+            goal_reached_this_episode = True
 
         goal_pos = info.get("goal_position", (None, None))
         episode_stats['goal_x'] = goal_pos[0]
@@ -278,7 +295,8 @@ def train(env, config=config):
         # Console output
         print(f"Episode {episode + 1:4d} | Reward: {episode_reward:8.3f} | "
               f"Steps: {steps:3d} | "
-              f"Dist: {info.get('distance_to_goal', 0.0):.3f} | "
+            #   f"Dist: {info.get('distance_to_goal', 0.0):.3f} | "
+              f"Vel: {episode_stats['velocity_reward']:.2f} | "
               f"Max current: {episode_stats['max_current']:.1f}mA | "
               f"Safety: {episode_stats['safety_interventions']} | "
               f"Reason: {info.get('termination_reason', 'unknown')}")

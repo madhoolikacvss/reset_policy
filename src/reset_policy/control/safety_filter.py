@@ -370,7 +370,7 @@ class SafetyFilter:
             current = abs(currents[i])
 
             # Single motor stuck: high current + no movement
-            if current > 500 and pos_change < 5 and action[i]!=0:
+            if current > 400 and pos_change < 15 and action[i]!=0:
                 action[i] = -0.5  # Force release
                 modified = True
                 reason = SafetyReason.MOTOR_STUCK
@@ -383,7 +383,7 @@ class SafetyFilter:
             for idx in pair_indices:
                 pos_change = abs(positions[idx] - prev_positions[idx])
                 current = abs(currents[idx])
-                if current > 400 and pos_change < 5:
+                if current > 400 and pos_change < 15:
                     stuck_motors.append(idx)
 
             if len(stuck_motors) == 2:

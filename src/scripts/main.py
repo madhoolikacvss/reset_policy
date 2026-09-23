@@ -23,6 +23,10 @@ from reset_policy.perception.cube_tracker import CubeTracker
 # Control
 from reset_policy.control.dynamixel_executor import DynamixelExecutor
 from reset_policy.control.safety_filter import SafetyFilter
+from dynamixel_sdk import (
+    PortHandler, PacketHandler, GroupSyncWrite,
+    GroupSyncRead,
+)
 
 # Environment
 from reset_policy.environment.occupancy_grid import OccupancyGrid
@@ -42,31 +46,83 @@ WORLD_TAG_ID = 0
 CUBE_TAG_ID = 1
 
 
+# def create_dynamixel_bus():
+#     """Initialize Dynamixel communication."""
+#     from dynamixel_sdk import PortHandler, PacketHandler, GroupSyncWrite
+    
+#     port = PortHandler(config.dynamixel.port_name)
+#     packet = PacketHandler(config.dynamixel.protocol_version)
+    
+#     if not port.openPort():
+#         raise RuntimeError("Cannot open Dynamixel port")
+    
+#     if not port.setBaudRate(config.dynamixel.baudrate):
+#         raise RuntimeError("Cannot set baudrate")
+    
+#     print("Dynamixel connected")
+    
+#     # Ping all motors
+#     for motor_id in config.motor.motor_ids:
+#         model, comm, error = packet.ping(port, motor_id)
+#         print(f"Motor {motor_id}: {model}, {packet.getTxRxResult(comm)}, {packet.getRxPacketError(error)}")
+    
+#     # Create sync write for goal position (address 116, 4 bytes)
+#     sync_write = GroupSyncWrite(port, packet, 116, 4)
+    
+#     return port, packet, sync_write
+
 def create_dynamixel_bus():
     """Initialize Dynamixel communication."""
-    from dynamixel_sdk import PortHandler, PacketHandler, GroupSyncWrite
-    
+    from dynamixel_sdk import (
+        PortHandler,
+        PacketHandler,
+        GroupSyncWrite,
+        GroupSyncRead,
+    )
+
     port = PortHandler(config.dynamixel.port_name)
     packet = PacketHandler(config.dynamixel.protocol_version)
-    
+
     if not port.openPort():
         raise RuntimeError("Cannot open Dynamixel port")
-    
+
     if not port.setBaudRate(config.dynamixel.baudrate):
         raise RuntimeError("Cannot set baudrate")
-    
+
     print("Dynamixel connected")
-    
+
     # Ping all motors
     for motor_id in config.motor.motor_ids:
         model, comm, error = packet.ping(port, motor_id)
-        print(f"Motor {motor_id}: {model}, {packet.getTxRxResult(comm)}, {packet.getRxPacketError(error)}")
-    
-    # Create sync write for goal position (address 116, 4 bytes)
-    sync_write = GroupSyncWrite(port, packet, 116, 4)
-    
-    return port, packet, sync_write
+        print(
+            f"Motor {motor_id}: {model}, "
+            f"{packet.getTxRxResult(comm)}, "
+            f"{packet.getRxPacketError(error)}"
+        )
 
+    # Goal Position sync write (address 116, 4 bytes)
+    sync_write = GroupSyncWrite(port, packet, 116, 4)
+
+    # --- Sync reads for bulk telemetry ---
+    ADDR_PRESENT_POSITION         = config.dynamixel.addr_present_position         # 132
+    ADDR_PRESENT_CURRENT          = config.dynamixel.addr_present_current          # 126
+    ADDR_PRESENT_INPUT_VOLTAGE    = config.dynamixel.addr_present_input_voltage    # 144
+    ADDR_PRESENT_TEMPERATURE      = config.dynamixel.addr_present_temperature      # 146
+    ADDR_HARDWARE_ERROR_STATUS    = config.dynamixel.addr_hardware_error_status    # 70
+
+    sync_reads = {
+        "positions":    GroupSyncRead(port, packet, ADDR_PRESENT_POSITION, 4),
+        "currents":     GroupSyncRead(port, packet, ADDR_PRESENT_CURRENT, 2),
+        "voltages":     GroupSyncRead(port, packet, ADDR_PRESENT_INPUT_VOLTAGE, 2),
+        "temperatures": GroupSyncRead(port, packet, ADDR_PRESENT_TEMPERATURE, 1),
+        "hw_status":    GroupSyncRead(port, packet, ADDR_HARDWARE_ERROR_STATUS, 1),
+    }
+
+    for sr in sync_reads.values():
+        for motor_id in config.motor.motor_ids:
+            sr.addParam(motor_id)
+
+    return port, packet, sync_write, sync_reads
 
 def create_environment():
     """Create environment with all components."""
@@ -100,13 +156,19 @@ def create_environment():
     )
     
     # Initialize Dynamixels
-    port, packet, sync_write = create_dynamixel_bus()
-    
+    (
+        port,
+        packet,
+        sync_write,
+        sync_reads,
+    ) = create_dynamixel_bus()
+
     executor = DynamixelExecutor(
         port_handler=port,
         packet_handler=packet,
         motor_ids=config.motor.motor_ids,
         group_sync_write=sync_write,
+        group_sync_reads=sync_reads,
     )
     executor.initialize()
     
