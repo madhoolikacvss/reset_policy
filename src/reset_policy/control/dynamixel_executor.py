@@ -760,7 +760,6 @@ class DynamixelExecutor:
             return
 
         print("Disabling all motors via sync write...")
-
         try:
             for motor in self.motor_ids:
                 for attempt in range(3):
