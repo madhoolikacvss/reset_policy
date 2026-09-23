@@ -65,7 +65,7 @@ class ResetPolicyEnv(gym.Env):
         self.high_current_threshold = kwargs.get('high_current_threshold', config.environment.high_current_threshold)
         
         # Goal-related config
-        self.goal_success_threshold = kwargs.get('goal_success_threshold', 0.03)  # 3 cm
+        self.goal_success_threshold = kwargs.get('goal_success_threshold', 0.005) 
         self.goal_margin = kwargs.get('goal_margin', 0.05)  # 5 cm from edges
         
         # Spaces (20 dims: cube pos(3) + goal pos(2) + motor pos delta(4) + currents(4) + tensions(3) + target errors(4))
@@ -138,7 +138,7 @@ class ResetPolicyEnv(gym.Env):
             self.episode_count = options['episode_num']
         else:
             self.episode_count += 1
-        time.sleep(3)
+        time.sleep(0.5)
         
         print("\n================ ENV RESET ================")
         self.reward_fn.prev_currents = None
@@ -169,6 +169,10 @@ class ResetPolicyEnv(gym.Env):
             print(f"Current position: ({x:.3f}, {y:.3f})")
             print(f"Board bounds: x=[{self.grid.x_min:.3f}, {self.grid.x_max:.3f}], "
                     f"y=[{self.grid.y_min:.3f}, {self.grid.y_max:.3f}]")
+            # print(f"Env tracker says:  x={x:.4f}, y={y:.4f}")
+            # print(f"Tracker object:    {self.obs_builder.cube_tracker}")
+            # print(f"Tracker config:    {vars(self.obs_builder.cube_tracker)}") 
+            # print(f"cube tracker's get_state() method output: x, y, z, yaw: {self.obs_builder.cube_tracker.get_state()}")
 
         # Sample new goal
         x_goal, y_goal = self.sample_goal()

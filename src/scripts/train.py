@@ -63,7 +63,7 @@ def train(env, config=config):
         
         # Wait for motors to settle
         print("  Waiting for motors to settle...")
-        time.sleep(2)
+        time.sleep(1)
         
         # Verify positions
         print("  Verifying positions...")
@@ -126,6 +126,7 @@ def train(env, config=config):
             env.renderer.update_episode(episode + 1)
         
         # Rollout
+        goal_reached_this_episode = False
         while not (terminated or truncated):
             state_tensor = torch.tensor(state, dtype=torch.float32, device=config.training.device)
             
@@ -198,6 +199,33 @@ def train(env, config=config):
             if info.get("hardware_error", False):
                 for motor_id in info.get("hardware_error_ids", []):
                     episode_stats['hardware_error_ids'].add(int(motor_id))
+
+            # if info.get("termination_reason") == "goal_reached":
+            #     print(f"\n{'='*60}")
+            #     print(f"TRAINING COMPLETE")
+            #     print(f"Episode {episode + 1}: goal reached in {steps} steps")
+            #     print(f"Goal: {info.get('goal_position')}")
+            #     print(f"Cube: {info.get('cube_position')}")
+            #     print(f"Final distance: {info.get('distance_to_goal'):.4f} m")
+            #     print(f"{'='*60}\n")
+
+            #     # Save final checkpoint before breaking
+            #     final_path = config.checkpoint_dir / "ppo_goal_reached.pth"
+            #     torch.save({
+            #         "episode": episode,
+            #         "model_state_dict": actor_critic.state_dict(),
+            #         "optimizer_state_dict": ppo.optimizer.state_dict(),
+            #         "steps_since_update": steps_since_update,
+            #         "termination_reason": "goal_reached",
+            #     }, final_path)
+            #     print(f"Saved final checkpoint: {final_path}")
+
+            #     # Close logger and video recorder
+            #     logger.close()
+            #     if video_recorder is not None:
+            #         video_recorder.close()
+
+            #     return actor_critic
             
             state = next_state
 
@@ -290,6 +318,25 @@ def train(env, config=config):
                 "steps_since_update": steps_since_update,
             }, checkpoint_path)
             print(f"Saved checkpoint: {checkpoint_path}")
+
+        if goal_reached_this_episode:
+            final_path = config.checkpoint_dir / "ppo_goal_reached.pth"
+            torch.save({
+                "episode": episode,
+                "model_state_dict": actor_critic.state_dict(),
+                "optimizer_state_dict": ppo.optimizer.state_dict(),
+                "steps_since_update": steps_since_update,
+                "termination_reason": "goal_reached",
+            }, final_path)
+            print(f"Saved goal-reached checkpoint: {final_path}")
+
+            # Close logger 
+            if video_recorder is not None:
+                video_recorder.close()
+            logger.close()
+
+            return actor_critic
+        
     # Close video recorder
     if video_recorder is not None:
         video_recorder.close()
