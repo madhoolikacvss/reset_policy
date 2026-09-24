@@ -153,7 +153,9 @@ def train(env, config=config):
                 'vx_actual': info.get('vx_actual'),
                 'vy_actual': info.get('vy_actual'),
                 'v_error': info.get('v_error'),
+                'velocity_reward': info.get('velocity_reward'), 
                 'obs': obs_before.tolist(),
+                'safety_penalty': info.get('safety_penalty'),
                 'actions': action_np.tolist(),
             }
 

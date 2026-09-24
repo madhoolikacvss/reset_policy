@@ -250,6 +250,35 @@ class DynamixelExecutor:
             "hardware_status": hardware_status,
         }
 
+    def _get_all_telemetry(self):
+        """
+        Read complete telemetry for all 4 motors using sync reads.
+        Replaces 4× _get_motor_telemetry() calls (32 individual reads)
+        with 8 sync reads.
+        """
+        positions    = self._sync_read("positions", 4, signed=True)
+        currents     = self._sync_read("currents", 2, signed=True)
+        voltages_raw = self._sync_read("voltages", 2)
+        temperatures = self._sync_read("temperatures", 1)
+        pwms         = self._sync_read("pwm", 2, signed=True)
+        velocities   = self._sync_read("velocity", 4, signed=True)
+        torques      = self._sync_read("torque", 1)
+        hw_statuses  = self._sync_read("hw_status", 1)
+
+        telemetry = {}
+        for i, m in enumerate(self.motor_ids):
+            telemetry[m] = {
+                "position":       positions[i] if positions else None,
+                "current":        currents[i] if currents else None,
+                "voltage":        voltages_raw[i] * 0.1 if voltages_raw else None,
+                "temperature":    temperatures[i] if temperatures else None,
+                "torque":         torques[i] if torques else None,
+                "pwm":            pwms[i] if pwms else None,
+                "velocity":       velocities[i] if velocities else None,
+                "hardware_status": hw_statuses[i] if hw_statuses else None,
+            }
+        return telemetry
+
     # Sync read helper
     def _sync_read(self, key: str, size: int, signed: bool = False):
         """
@@ -517,7 +546,7 @@ class DynamixelExecutor:
                 gap = abs(current_target - current_pos)
 
                 if gap > MAX_ALLOWED_GAP:
-                    print(f"  Motor {motor}: Target gap {gap} > {MAX_ALLOWED_GAP}, resetting target {current_target} -> {current_pos}")
+                    # print(f"  Motor {motor}: Target gap {gap} > {MAX_ALLOWED_GAP}, resetting target {current_target} -> {current_pos}")
                     self.targets[motor] = current_pos
                     current_target = current_pos
 
@@ -531,14 +560,15 @@ class DynamixelExecutor:
             self.targets[motor] = int(np.clip(self.targets[motor], lower_limit, upper_limit))
             targets_after[motor] = self.targets[motor]
 
-            print(f"  Motor {motor}: action={action_val:+.5f} "
-                f"delta={encoder_delta:+d} "
-                f"target={targets_before[motor]} -> {self.targets[motor]}")
+            # print(f"  Motor {motor}: action={action_val:+.5f} "
+            #     f"delta={encoder_delta:+d} "
+            #     f"target={targets_before[motor]} -> {self.targets[motor]}")
 
         # Send synchronized command
         if not self._send_sync_write(targets_after):
             print("\n!!! COMMUNICATION FAILURE !!!")
-            telemetry = {m: self._get_motor_telemetry(m) for m in self.motor_ids}
+            # telemetry = {m: self._get_motor_telemetry(m) for m in self.motor_ids}
+            telemetry = self._get_all_telemetry()
             self._log_action(
                 action, encoder_deltas, targets_before, targets_after, telemetry,
                 success=False, error_message="Communication failure"
@@ -548,28 +578,29 @@ class DynamixelExecutor:
         time.sleep(0.02)
 
         # --- SYNC READ: hardware error status for all motors at once ---
+
+        # hw_statuses = self._sync_read("hw_status", size=1)
+
         hardware_error_ids = []
         hardware_error_status = {}
         packet_errors = {}
-
-        hw_statuses = self._sync_read("hw_status", size=1)
-
-        for i, motor in enumerate(self.motor_ids):
-            status = hw_statuses[i] if hw_statuses is not None else None
-            hardware_error_status[motor] = status
-
-            if status is not None and status & VALID_HW_ERROR_BITS:
-                hardware_error_ids.append(motor)
-
         # Read telemetry (per-motor, unchanged)
         try:
-            telemetry = {m: self._get_motor_telemetry(m) for m in self.motor_ids}
+            # telemetry = {m: self._get_motor_telemetry(m) for m in self.motor_ids}
+            telemetry = self._get_all_telemetry()
         except Exception as e:
             print(f"ERROR: Could not read telemetry: {e}")
             return ExecutionResult(
                 success=False,
                 error_message=f"Could not read telemetry: {e}"
             )
+        
+
+        for motor in self.motor_ids:
+            status = telemetry[motor]["hardware_status"]
+            hardware_error_status[motor] = status
+            if status is not None and status & VALID_HW_ERROR_BITS:
+                hardware_error_ids.append(motor)
 
         # Handle hardware errors
         if hardware_error_ids:
@@ -601,15 +632,15 @@ class DynamixelExecutor:
         )
 
         # Print telemetry
-        print(f"\nACTION #{self.action_count} TELEMETRY")
-        for motor in self.motor_ids:
-            t = telemetry[motor]
-            print(f"  Motor {motor}: pos={t['position']} target={self.targets[motor]} "
-                f"current={t['current']}mA voltage={t['voltage']}V "
-                f"temp={t['temperature']}°C PWM={t['pwm']} "
-                f"velocity={t['velocity']} HW={t['hardware_status']}")
+        # print(f"\nACTION #{self.action_count} TELEMETRY")
+        # for motor in self.motor_ids:
+        #     t = telemetry[motor]
+        #     print(f"  Motor {motor}: pos={t['position']} target={self.targets[motor]} "
+        #         f"current={t['current']}mA voltage={t['voltage']}V "
+        #         f"temp={t['temperature']}°C PWM={t['pwm']} "
+        #         f"velocity={t['velocity']} HW={t['hardware_status']}")
 
-        print(f"  ACTION #{self.action_count} SUCCESS")
+        # print(f"  ACTION #{self.action_count} SUCCESS")
 
         return ExecutionResult(success=True)
 
@@ -680,7 +711,8 @@ class DynamixelExecutor:
     def log_motor_diagnostics(self, motor_id, reason="periodic", packet_error=None, hardware_status=None):
         """Log diagnostic data for one motor."""
         timestamp = datetime.now().isoformat()
-        telemetry = self._get_motor_telemetry(motor_id)
+        # telemetry = self._get_motor_telemetry(motor_id)
+        telemetry = self._get_all_telemetry()
 
         if hardware_status is None:
             hardware_status = telemetry["hardware_status"]
@@ -702,18 +734,44 @@ class DynamixelExecutor:
         except Exception as e:
             print(f"WARNING: failed to write diagnostic log: {e}")
 
+    # def log_all_motor_diagnostics(self, reason="periodic", packet_errors=None, hardware_statuses=None):
+    #     """Log diagnostics for all motors."""
+    #     packet_errors = packet_errors or {}
+    #     hardware_statuses = hardware_statuses or {}
+
+    #     for motor in self.motor_ids:
+    #         self.log_motor_diagnostics(
+    #             motor,
+    #             reason=reason,
+    #             packet_error=packet_errors.get(motor),
+    #             hardware_status=hardware_statuses.get(motor),
+    #         )
+
     def log_all_motor_diagnostics(self, reason="periodic", packet_errors=None, hardware_statuses=None):
-        """Log diagnostics for all motors."""
         packet_errors = packet_errors or {}
         hardware_statuses = hardware_statuses or {}
-
+        
+        telemetry_all = self._get_all_telemetry()  # 8 sync reads total
+        
         for motor in self.motor_ids:
-            self.log_motor_diagnostics(
-                motor,
-                reason=reason,
-                packet_error=packet_errors.get(motor),
-                hardware_status=hardware_statuses.get(motor),
-            )
+            telemetry = telemetry_all[motor]
+            hardware_status = hardware_statuses.get(motor, telemetry["hardware_status"])
+            decoded = self.decode_hardware_error(hardware_status)
+            
+            try:
+                with open(self.diagnostic_log_file, "a", newline="") as f:
+                    writer = csv.writer(f)
+                    writer.writerow([
+                        datetime.now().isoformat(), self.action_count, motor,
+                        self.targets.get(motor), telemetry["position"],
+                        telemetry["current"], telemetry["voltage"], telemetry["temperature"],
+                        telemetry["torque"], telemetry["pwm"], telemetry["velocity"],
+                        hardware_status, self.format_hex(hardware_status),
+                        packet_errors.get(motor), self.format_hex(packet_errors.get(motor)),
+                        ", ".join(decoded),
+                    ])
+            except Exception as e:
+                print(f"WARNING: failed to write diagnostic log: {e}")
 
     def _log_action(self, action, encoder_deltas, targets_before, targets_after, telemetry,
                     packet_errors=None, success=True, hardware_error=False,

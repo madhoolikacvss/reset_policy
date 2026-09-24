@@ -109,6 +109,9 @@ def create_dynamixel_bus():
     ADDR_PRESENT_INPUT_VOLTAGE    = config.dynamixel.addr_present_input_voltage    # 144
     ADDR_PRESENT_TEMPERATURE      = config.dynamixel.addr_present_temperature      # 146
     ADDR_HARDWARE_ERROR_STATUS    = config.dynamixel.addr_hardware_error_status    # 70
+    ADDR_PRESENT_PWM = config.dynamixel.addr_present_pwm
+    ADDR_PRESENT_VELOCITY = config.dynamixel.addr_present_velocity
+    ADDR_TORQUE_ENABLE = config.dynamixel.addr_torque_enable
 
     sync_reads = {
         "positions":    GroupSyncRead(port, packet, ADDR_PRESENT_POSITION, 4),
@@ -116,6 +119,9 @@ def create_dynamixel_bus():
         "voltages":     GroupSyncRead(port, packet, ADDR_PRESENT_INPUT_VOLTAGE, 2),
         "temperatures": GroupSyncRead(port, packet, ADDR_PRESENT_TEMPERATURE, 1),
         "hw_status":    GroupSyncRead(port, packet, ADDR_HARDWARE_ERROR_STATUS, 1),
+        "pwm":          GroupSyncRead(port, packet, ADDR_PRESENT_PWM, 2),        # NEW
+        "velocity":     GroupSyncRead(port, packet, ADDR_PRESENT_VELOCITY, 4),   # NEW
+        "torque":       GroupSyncRead(port, packet, ADDR_TORQUE_ENABLE, 1)
     }
 
     for sr in sync_reads.values():

@@ -81,8 +81,8 @@ class RewardFunction:
         self.prev_cube_x = None
         self.prev_cube_y = None
 
-        self.v_target = (-0.05, 0.0)     # fixed target
-        self.velocity_k = 10.0
+        self.v_target = (-0.005, 0.0)     # fixed target
+        self.velocity_k = 150.0
         self.velocity_window = 3       # smooth over 3 steps
         self.dt = 0.8
         self.cube_history = []

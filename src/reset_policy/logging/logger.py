@@ -130,8 +130,8 @@ class TrainingLogger:
             # Distance to goal (per step)
             "dist_to_goal_x", "dist_to_goal_y", "dist_to_goal",
 
-            # --- Velocity (NEW) ---
-            "vx_actual", "vy_actual", "v_error",
+            # --- Velocity---
+            "vx_actual", "vy_actual", "v_error", "velocity_reward",
 
             # Observation dim 0-2: normalized cube position
             "obs_cube_x_norm", "obs_cube_y_norm", "obs_cube_yaw_norm",
@@ -157,6 +157,9 @@ class TrainingLogger:
 
             # Actions (4-dim)
             "action_m16", "action_m17", "action_m18", "action_m19",
+
+            # total safety reward
+            "total_safety_penalty",
         ])
 
         # Clean up old motor logs
@@ -203,6 +206,7 @@ class TrainingLogger:
         vx_actual = obs_data.get('vx_actual', None)
         vy_actual = obs_data.get('vy_actual', None)
         v_error = obs_data.get('v_error', None)
+        velocity_reward = obs_data.get('velocity_reward', None) 
 
         # Observation (20 dims)
         obs = obs_data.get('obs', [None] * 20)
@@ -211,6 +215,8 @@ class TrainingLogger:
 
         # Actions (4 dims)
         actions = obs_data.get('actions', motor_data.get('actions', [None] * 4))
+
+        safety_penalty = obs_data.get('safety_penalty')
 
         self.current_motor_writer.writerow([
             step_num,
@@ -223,7 +229,7 @@ class TrainingLogger:
             dist_x, dist_y, dist_total,
 
             # Velocity
-            vx_actual, vy_actual, v_error,
+            vx_actual, vy_actual, v_error, velocity_reward,
 
             # Observation (20 dims)
             obs[0], obs[1], obs[2],
@@ -235,6 +241,7 @@ class TrainingLogger:
 
             # Actions
             actions[0], actions[1], actions[2], actions[3],
+            safety_penalty,
         ])
 
         # Flush periodically
