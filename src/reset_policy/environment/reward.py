@@ -34,7 +34,7 @@ class RewardFunction:
     def __init__(
         self,
         # Distance reward
-        distance_scale: float = 0.1,  # Controls decay rate (larger = decays faster)
+        distance_scale: float = 3.0,  # Controls decay rate (larger = decays faster)
         
         # Current change
         current_change_weight: float = 0.1,
@@ -82,7 +82,8 @@ class RewardFunction:
         Far away: reward approaches 0
         """
         distance = np.sqrt((cube_x - goal_x)**2 + (cube_y - goal_y)**2)
-        return 1.0 / (1.0 + self.distance_scale * distance)
+        # return 1.0 / (1.0 + self.distance_scale * distance)
+        return float(np.exp(-self.distance_scale * distance))
     
     def current_change_penalty(self, motor_currents: Sequence[float]) -> float:
         """
