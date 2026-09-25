@@ -23,17 +23,17 @@ from reset_policy.logging.video_recorder import (
 
 def train(env, config=config):
     """Train PPO policy."""
-    
+
     actor_critic = ActorCritic().to(config.training.device)
     rollout_buffer = RolloutBuffer()
     ppo = PPO(actor_critic)
-    
+
     print(f"Training on {config.training.device}")
     print(f"Logging to: {logger.log_dir}")
-    
+
     steps_since_update = 0
     start_episode = 0
-    
+
     # Resume from checkpoint
     if config.training.resume_from and Path(config.training.resume_from).exists():
         print(f"\nResuming from checkpoint: {config.training.resume_from}")
@@ -46,25 +46,25 @@ def train(env, config=config):
 
         print("\nChecking motor positions...")
         executor = env.executor
-        
+
         for motor_id in executor.motor_ids:
             initial_pos = executor.initial_positions[motor_id]
             current_pos = executor.read_position(motor_id)
-            
+
             if current_pos is not None:
                 delta = abs(current_pos - initial_pos)
                 print(f"  Motor {motor_id}: current={current_pos}, initial={initial_pos}, delta={delta}")
-                
+
                 # Reset to initial position (same as fresh start)
                 executor._write_goal_position_direct(motor_id, initial_pos)
                 executor.targets[motor_id] = initial_pos
             else:
                 print(f"  Motor {motor_id}: Cannot read position!")
-        
+
         # Wait for motors to settle
         print("  Waiting for motors to settle...")
         time.sleep(1)
-        
+
         # Verify positions
         print("  Verifying positions...")
         positions = executor.read_positions()
@@ -72,7 +72,7 @@ def train(env, config=config):
             for motor_id, pos in zip(executor.motor_ids, positions):
                 initial = executor.initial_positions[motor_id]
                 print(f"    Motor {motor_id}: {pos} (initial: {initial})")
-        
+
         print("  Motor reset complete\n")
 
     video_recorder = None
@@ -83,7 +83,7 @@ def train(env, config=config):
         except Exception as e:
             print(f"[VIDEO] WARNING: Could not initialize video recorder: {e}")
             video_recorder = None
-    
+
     for episode in range(start_episode, config.training.episodes):
         # Start episode logging
         logger.start_episode(episode + 1)
@@ -94,14 +94,13 @@ def train(env, config=config):
         if should_record:
             video_recorder.start_episode(episode + 1)
 
-        
         state, _ = env.reset(options={'episode_num': episode + 1})
         episode_reward = 0.0
         terminated = False
         truncated = False
         steps = 0
         info = {}
-        
+
         # Episode stats
         episode_stats = {
             'distance_reward': 0.0,
@@ -124,56 +123,71 @@ def train(env, config=config):
         # Update renderer for new episode
         if hasattr(env, 'renderer') and env.renderer is not None:
             env.renderer.update_episode(episode + 1)
-        
+
         # Rollout
         goal_reached_this_episode = False
         while not (terminated or truncated):
             state_tensor = torch.tensor(state, dtype=torch.float32, device=config.training.device)
-            
+
             with torch.no_grad():
                 action, log_prob, value = actor_critic.act(state_tensor)
-            
+
             positions_before = env.executor.read_positions()
             targets_before = [env.executor.targets.get(m, None) for m in env.executor.motor_ids]
 
             action_np = action.cpu().numpy().astype(np.float32)
+            obs_before = state
             next_state, reward, terminated, truncated, info = env.step(action_np)
+
+            # --- Capture cube/goal for logging (output of this step) ---
+            cube_pos = info.get("cube_position", (None, None))
+            goal_pos = info.get("goal_position", (None, None))
+
+            # --- Build observation dict (what the policy saw BEFORE the action) ---
+            obs_data = {
+                'cube_x': cube_pos[0],
+                'cube_y': cube_pos[1],
+                'goal_x': goal_pos[0],
+                'goal_y': goal_pos[1],
+                'distance_reward': info.get('distance_reward'),
+                'obs': obs_before.tolist(),
+                'safety_penalty': info.get('safety_penalty'),
+                'actions': action_np.tolist(),
+            }
+
+            # --- Capture post-step motor state (for motor_data) ---
+            positions_after = env.executor.read_positions()
+            targets_after = [env.executor.targets.get(m, None) for m in env.executor.motor_ids]
+
+            motor_data = {
+                'targets': targets_after if targets_after else targets_before,
+                'positions': positions_after if positions_after else positions_before,
+                'currents': info.get('motor_currents', [None] * 4),
+                'voltages': info.get('motor_voltages', [None] * 4),
+                'temperatures': info.get('motor_temperatures', [None] * 4),
+                'actions': action_np.tolist(),
+            }
+
+            # --- Single logging call with both dicts ---
+            logger.log_step(
+                step_num=steps + 1,
+                action_count=env.executor.action_count if hasattr(env, 'executor') else 0,
+                motor_data=motor_data,
+                obs_data=obs_data,
+            )
 
             if should_record:
                 video_recorder.capture_frame()
 
             if info.get("action_modified", False):
                 episode_stats['safety_interventions'] += 1
-                
                 reason = info.get("safety_reason", "unknown")
                 safety_penalty = info.get("safety_penalty", 0.0)
-                
-                # Track counts
                 episode_stats['safety_reasons'][reason] = episode_stats['safety_reasons'].get(reason, 0) + 1
-                
-                # Track penalty sums
-                episode_stats['safety_penalty_by_reason'][reason] = episode_stats['safety_penalty_by_reason'].get(reason, 0.0) + safety_penalty
+                episode_stats['safety_penalty_by_reason'][reason] = (
+                    episode_stats['safety_penalty_by_reason'].get(reason, 0.0) + safety_penalty
+                )
 
-                
-            positions_after = env.executor.read_positions()
-            targets_after = [env.executor.targets.get(m, None) for m in env.executor.motor_ids]
-            
-            # Log motor data for this step
-            motor_data = {
-                'targets': targets_after if targets_after else targets_before,
-                'positions': positions_after if positions_after else positions_before,
-                'currents': info.get('motor_currents', [None]*4),
-                'voltages': info.get('motor_voltages', [None]*4),
-                'temperatures': info.get('motor_temperatures', [None]*4),
-                'actions': action_np.tolist(),
-            }
-
-            logger.log_step(
-                step_num=steps + 1,
-                action_count=env.executor.action_count if hasattr(env, 'executor') else 0,
-                motor_data=motor_data,
-            )
-            
             rollout_buffer.add(
                 state=state_tensor,
                 action=action.detach(),
@@ -183,11 +197,10 @@ def train(env, config=config):
                 log_prob=log_prob.detach(),
                 bootstrap_value=None,
             )
-            
             episode_reward += float(reward)
             steps += 1
             steps_since_update += 1
-            
+
             # Update stats
             episode_stats['distance_reward'] += float(info.get("distance_reward", 0.0))
             episode_stats['current_change_penalty'] += float(info.get("current_change_penalty", 0.0))
@@ -195,38 +208,14 @@ def train(env, config=config):
             episode_stats['tension_penalty'] += float(info.get("tension_penalty", 0.0))
             episode_stats['safety_penalty'] += float(info.get("safety_penalty", 0.0))
             episode_stats['max_current'] = max(episode_stats['max_current'], float(info.get("max_current", 0.0)))
-            
+
             if info.get("hardware_error", False):
                 for motor_id in info.get("hardware_error_ids", []):
                     episode_stats['hardware_error_ids'].add(int(motor_id))
 
-            # if info.get("termination_reason") == "goal_reached":
-            #     print(f"\n{'='*60}")
-            #     print(f"TRAINING COMPLETE")
-            #     print(f"Episode {episode + 1}: goal reached in {steps} steps")
-            #     print(f"Goal: {info.get('goal_position')}")
-            #     print(f"Cube: {info.get('cube_position')}")
-            #     print(f"Final distance: {info.get('distance_to_goal'):.4f} m")
-            #     print(f"{'='*60}\n")
+            if info.get("termination_reason") == "goal_reached":
+                goal_reached_this_episode = True
 
-            #     # Save final checkpoint before breaking
-            #     final_path = config.checkpoint_dir / "ppo_goal_reached.pth"
-            #     torch.save({
-            #         "episode": episode,
-            #         "model_state_dict": actor_critic.state_dict(),
-            #         "optimizer_state_dict": ppo.optimizer.state_dict(),
-            #         "steps_since_update": steps_since_update,
-            #         "termination_reason": "goal_reached",
-            #     }, final_path)
-            #     print(f"Saved final checkpoint: {final_path}")
-
-            #     # Close logger and video recorder
-            #     logger.close()
-            #     if video_recorder is not None:
-            #         video_recorder.close()
-
-            #     return actor_critic
-            
             state = next_state
 
         goal_pos = info.get("goal_position", (None, None))
@@ -234,7 +223,7 @@ def train(env, config=config):
         episode_stats['goal_y'] = goal_pos[1]
         episode_stats['final_distance_to_goal'] = info.get("distance_to_goal", None)
         episode_stats['goal_reached'] = info.get("goal_reached", False)
-        
+
         # After episode ends, handle bootstrapping for truncated episodes
         if truncated and not terminated:
             with torch.no_grad():
@@ -243,6 +232,7 @@ def train(env, config=config):
 
         if should_record:
             video_recorder.end_episode()
+
         # Log episode summary
         logger.log_episode(
             episode_num=episode + 1,
@@ -253,28 +243,27 @@ def train(env, config=config):
             truncated=truncated,
             episode_stats=episode_stats,
         )
-        
+
         # Close motor log for this episode
         logger.close_motor_log()
-        
+
         # PPO update
         buffer_size = len(rollout_buffer)
-        if (steps_since_update >= config.training.min_steps_before_update or 
+        if (steps_since_update >= config.training.min_steps_before_update or
             buffer_size > config.training.max_buffer_size):
             losses = ppo.update(rollout_buffer)
             steps_since_update = 0
-            
+
             # Log training metrics
             logger.log_training_metrics(episode + 1, losses, buffer_size)
-            
+
             print(f"Episode {episode + 1:4d} | UPDATE | Steps: {steps:3d} | "
                   f"Buffer: {buffer_size} | Actor: {losses['actor_loss']:.4f} | "
                   f"Critic: {losses['critic_loss']:.4f} | Entropy: {losses['entropy']:.4f}")
         else:
             print(f"Episode {episode + 1:4d} | SKIP UPDATE | Steps: {steps:3d} | "
                   f"Buffer: {buffer_size} | Reason: {info.get('termination_reason', 'unknown')}")
-        
-        
+
         # Console output
         print(f"Episode {episode + 1:4d} | Reward: {episode_reward:8.3f} | "
               f"Steps: {steps:3d} | "
@@ -282,12 +271,12 @@ def train(env, config=config):
               f"Max current: {episode_stats['max_current']:.1f}mA | "
               f"Safety: {episode_stats['safety_interventions']} | "
               f"Reason: {info.get('termination_reason', 'unknown')}")
-        
+
         if hasattr(env, 'renderer') and env.renderer is not None:
             if env.last_valid_observation is not None:
                 cube_x_cm = (env.last_valid_observation.cube_x - env.grid.x_min) * 100
                 cube_y_cm = (env.last_valid_observation.cube_y - env.grid.y_min) * 100
-                
+
                 # Convert goals from meters (board frame) to cm (renderer frame)
                 goals_cm = [
                     (
@@ -296,10 +285,10 @@ def train(env, config=config):
                     )
                     for gx, gy in config.environment.fixed_goals
                 ]
-                
+
                 # Current goal index (0-based)
                 current_goal_idx = (episode) % len(config.environment.fixed_goals)
-                
+
                 env.renderer.render(
                     cube_x_cm=cube_x_cm,
                     cube_y_cm=cube_y_cm,
@@ -308,6 +297,7 @@ def train(env, config=config):
                     goals=goals_cm,
                     current_goal_idx=current_goal_idx,
                 )
+
         # Checkpoint
         if (episode + 1) % config.training.save_every == 0:
             checkpoint_path = config.checkpoint_dir / f"ppo_checkpoint_{episode + 1}.pth"
@@ -330,18 +320,17 @@ def train(env, config=config):
             }, final_path)
             print(f"Saved goal-reached checkpoint: {final_path}")
 
-            # Close logger 
+            # Close logger
             if video_recorder is not None:
                 video_recorder.close()
             logger.close()
 
             return actor_critic
-        
+
     # Close video recorder
     if video_recorder is not None:
         video_recorder.close()
         print("[VIDEO] Video recorder closed")
-
 
     # Final checkpoint
     final_path = config.checkpoint_dir / "ppo_final.pth"
@@ -353,8 +342,8 @@ def train(env, config=config):
     }, final_path)
     print(f"Saved final checkpoint: {final_path}")
     print("Training complete.")
-    
+
     # Close logger
     logger.close()
-    
+
     return actor_critic
