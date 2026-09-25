@@ -31,7 +31,7 @@ from reset_policy.perception.cameras import (
 # ============================================================
 
 RECORD_VIDEO = True
-VIDEO_CAMERA_SERIAL = "310643060553"
+VIDEO_CAMERA_SERIAL = "243623021110"
 VIDEO_WIDTH = 1280
 VIDEO_HEIGHT = 720
 VIDEO_FPS = 5

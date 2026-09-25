@@ -137,7 +137,7 @@ class ObservationBuilder:
     def reset(self, max_retries: int = 5, retry_delay: float = 0.2):
         """Reset initial motor positions with retries."""
         print("Waiting for motors to settle before reading positions...")
-        time.sleep(1)
+        time.sleep(0.5)
         
         positions = None
         for attempt in range(max_retries):
@@ -180,6 +180,12 @@ class ObservationBuilder:
         
         best_state = min(cube_states, key=lambda s: abs(s.x - majority_x) + abs(s.y - majority_y))
         cube_state = best_state
+
+
+        print(f"[DEBUG] Raw cube_state from tracker: x={cube_state.x:.4f}, y={cube_state.y:.4f}, yaw={cube_state.yaw:.4f}")
+        print(f"[DEBUG] x_min={self.x_min}, x_max={self.x_max}, y_min={self.y_min}, y_max={self.y_max}")
+        print(f"[DEBUG] Normalized: x_norm={(cube_state.x - self.x_min)/(self.x_max - self.x_min):.4f}, "f"y_norm={(cube_state.y - self.y_min)/(self.y_max - self.y_min):.4f}")
+
         
         # Get motor positions
         motor_positions = self.executor.read_positions()

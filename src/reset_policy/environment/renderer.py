@@ -81,7 +81,7 @@ class BoardRenderer:
             
             # Draw marker
             ax.scatter(
-                gx, gy,
+                gy, gx, #gx, gy,
                 s=size,
                 marker='*',
                 color=color,
@@ -92,7 +92,7 @@ class BoardRenderer:
             
             # Draw number label
             ax.text(
-                gx, gy,
+                gy, gx, #gx, gy,
                 str(idx + 1),
                 fontsize=11,
                 weight='bold',
