@@ -66,7 +66,7 @@ for i, (gx, gy) in enumerate(goals):
         sub = df[mask].sort_values("episode")
 
         ax = axes3[i][0]
-        ax.plot(sub["episode"], sub["distance_reward_sum"],
+        ax.plot(sub["episode"], sub["velocity_reward_sum"]/sub["steps"],
                 marker="o", color="tab:green")
         ax.grid(True)
         ax.set_title(f"Goal ({gx}, {gy})", loc="left", fontsize=10)
@@ -74,8 +74,8 @@ for i, (gx, gy) in enumerate(goals):
         if i == len(goals) - 1:
                 ax.set_xlabel("Episode")
 
-axes3[0][0].set_ylabel("Distance Reward Sum")
-fig3.suptitle("Distance Reward Sum", fontsize=13, fontweight="bold", y=0.995)
+axes3[0][0].set_ylabel("velocity_reward (sum/#steps))")
+fig3.suptitle("velocity_reward per episode", fontsize=13, fontweight="bold", y=0.995)
 fig3.tight_layout()     
 
 
