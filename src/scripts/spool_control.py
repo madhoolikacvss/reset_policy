@@ -39,7 +39,7 @@ ADDR_OPERATING_MODE = 11
 EXTENDED_POSITION_MODE = 4
 TORQUE_ENABLE = 1
 TORQUE_DISABLE = 0
-MAX_ENCODER_DELTA = 200  # Same as your RL action
+MAX_ENCODER_DELTA = 10 # Same as your RL action
 
 
 def control_motor(motor_id: int, steps: int, direction: str = "pull"):
