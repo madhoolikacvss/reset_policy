@@ -711,8 +711,8 @@ class DynamixelExecutor:
     def log_motor_diagnostics(self, motor_id, reason="periodic", packet_error=None, hardware_status=None):
         """Log diagnostic data for one motor."""
         timestamp = datetime.now().isoformat()
-        # telemetry = self._get_motor_telemetry(motor_id)
-        telemetry = self._get_all_telemetry()
+        telemetry_all = self._get_all_telemetry()
+        telemetry = telemetry_all[motor_id]
 
         if hardware_status is None:
             hardware_status = telemetry["hardware_status"]
