@@ -128,7 +128,7 @@ class TrainingLogger:
             "cube_x", "cube_y",
 
             # Distance to goal (per step)
-            "dist_to_goal_x", "dist_to_goal_y", "dist_to_goal",
+            "dist_to_goal_x", "dist_to_goal_y", "dist_to_goal", "distance_reward",
 
             # --- Velocity---
             "vx_actual", "vy_actual", "v_error", "velocity_reward",
@@ -201,6 +201,7 @@ class TrainingLogger:
             dist_total = float(np.sqrt(dist_x**2 + dist_y**2))
         else:
             dist_x = dist_y = dist_total = None
+        distance_reward = obs_data.get('distance_reward', None)
 
         # Velocity debug fields
         vx_actual = obs_data.get('vx_actual', None)
@@ -226,7 +227,7 @@ class TrainingLogger:
             cube_x, cube_y,
 
             # Distance to goal
-            dist_x, dist_y, dist_total,
+            dist_x, dist_y, dist_total, distance_reward,
 
             # Velocity
             vx_actual, vy_actual, v_error, velocity_reward,

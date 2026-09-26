@@ -23,6 +23,7 @@ import numpy as np
 class RewardBreakdown:
     """Breakdown of reward components."""
     total: float
+    distance_reward: float
     velocity_reward: float
     current_change_penalty: float
     hardware_error_penalty: float
@@ -195,14 +196,14 @@ class RewardFunction:
         Hardware error: -1.0 (terminal only)
         Tension: 0 to -0.3
         """
-        # distance = self.distance_reward(cube_x, cube_y, goal_x, goal_y)
+        distance = self.distance_reward(cube_x, cube_y, goal_x, goal_y)
         velocity = self.velocity_reward(cube_x, cube_y) * self.velocity_weight
         change_penalty = self.current_change_penalty(motor_currents)
         hardware_penalty = self.hardware_error_penalty_value(hardware_error)
         tension = self.tension_penalty(motor_currents)
 
         total = (
-            # distance +
+            distance +
             velocity +
             change_penalty +
             hardware_penalty +
@@ -211,6 +212,7 @@ class RewardFunction:
 
         return RewardBreakdown(
             total=total,
+            distance_reward=distance,
             velocity_reward=velocity,
             current_change_penalty=change_penalty,
             hardware_error_penalty=hardware_penalty,

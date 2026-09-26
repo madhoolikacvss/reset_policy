@@ -104,6 +104,7 @@ def train(env, config=config):
         
         # Episode stats
         episode_stats = {
+            'distance_reward': 0.0,
             'velocity_reward': 0.0,
             'current_change_penalty': 0.0,
             'hardware_error_penalty': 0.0,
@@ -153,7 +154,8 @@ def train(env, config=config):
                 'vx_actual': info.get('vx_actual'),
                 'vy_actual': info.get('vy_actual'),
                 'v_error': info.get('v_error'),
-                'velocity_reward': info.get('velocity_reward'), 
+                'velocity_reward': info.get('velocity_reward'),
+                'distance_reward': info.get('distance_reward'),
                 'obs': obs_before.tolist(),
                 'safety_penalty': info.get('safety_penalty'),
                 'actions': action_np.tolist(),
@@ -207,6 +209,7 @@ def train(env, config=config):
             
             # Update stats
             episode_stats['velocity_reward'] += float(info.get("velocity_reward", 0.0))
+            episode_stats['distance_reward'] += float(info.get("distance_reward", 0.0))
             episode_stats['current_change_penalty'] += float(info.get("current_change_penalty", 0.0))
             episode_stats['hardware_error_penalty'] += float(info.get("hardware_error_penalty", 0.0))
             episode_stats['tension_penalty'] += float(info.get("tension_penalty", 0.0))
@@ -216,33 +219,6 @@ def train(env, config=config):
             if info.get("hardware_error", False):
                 for motor_id in info.get("hardware_error_ids", []):
                     episode_stats['hardware_error_ids'].add(int(motor_id))
-
-            # if info.get("termination_reason") == "goal_reached":
-            #     print(f"\n{'='*60}")
-            #     print(f"TRAINING COMPLETE")
-            #     print(f"Episode {episode + 1}: goal reached in {steps} steps")
-            #     print(f"Goal: {info.get('goal_position')}")
-            #     print(f"Cube: {info.get('cube_position')}")
-            #     print(f"Final distance: {info.get('distance_to_goal'):.4f} m")
-            #     print(f"{'='*60}\n")
-
-            #     # Save final checkpoint before breaking
-            #     final_path = config.checkpoint_dir / "ppo_goal_reached.pth"
-            #     torch.save({
-            #         "episode": episode,
-            #         "model_state_dict": actor_critic.state_dict(),
-            #         "optimizer_state_dict": ppo.optimizer.state_dict(),
-            #         "steps_since_update": steps_since_update,
-            #         "termination_reason": "goal_reached",
-            #     }, final_path)
-            #     print(f"Saved final checkpoint: {final_path}")
-
-            #     # Close logger and video recorder
-            #     logger.close()
-            #     if video_recorder is not None:
-            #         video_recorder.close()
-
-            #     return actor_critic
             
             state = next_state
         if info.get("termination_reason") == "goal_reached":
@@ -297,7 +273,8 @@ def train(env, config=config):
         # Console output
         print(f"Episode {episode + 1:4d} | Reward: {episode_reward:8.3f} | "
               f"Steps: {steps:3d} | "
-            #   f"Dist: {info.get('distance_to_goal', 0.0):.3f} | "
+               f"Dist: {info.get('distance_to_goal', 0.0):.3f} | "
+               f"Distance Reward: {episode_stats['distance_reward']:.2f} | "
               f"Vel: {episode_stats['velocity_reward']:.2f} | "
               f"Max current: {episode_stats['max_current']:.1f}mA | "
               f"Safety: {episode_stats['safety_interventions']} | "

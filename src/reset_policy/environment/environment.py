@@ -293,8 +293,8 @@ class ResetPolicyEnv(gym.Env):
             hardware_error=False,
         )
         reward = reward_info.total 
-        # if distance_to_goal < self.goal_success_threshold:
-        #     reward += 1.0  # Bonus for reaching goal
+        if distance_to_goal < self.goal_success_threshold:
+            reward += 1.0  # Bonus for reaching goal
         
         # Apply safety penalty
         safety_penalty = self._compute_safety_penalty(safety_info) + out_of_bound_penalty
@@ -314,9 +314,9 @@ class ResetPolicyEnv(gym.Env):
         elif out_of_bounds:
             terminated = True
             termination_reason = "out_of_bounds"
-        # elif distance_to_goal < self.goal_success_threshold:
-        #     terminated = True
-        #     termination_reason = "goal_reached"
+        elif distance_to_goal < self.goal_success_threshold:
+            terminated = True
+            termination_reason = "goal_reached"
         elif self.step_count >= self.max_steps:
             truncated = True
             termination_reason = "max_steps"
@@ -332,6 +332,7 @@ class ResetPolicyEnv(gym.Env):
             "goal_reached": distance_to_goal < self.goal_success_threshold,
             "steps": self.step_count,
             "visits": visits,
+            "distance_reward": reward_info.distance_reward,
             "velocity_reward": reward_info.velocity_reward,
             "current_change_penalty": reward_info.current_change_penalty,
             "hardware_error_penalty": reward_info.hardware_error_penalty,
@@ -368,7 +369,7 @@ class ResetPolicyEnv(gym.Env):
             initial_motor_positions=np.zeros(4, dtype=np.float32),
             cube_x_norm=0.0,
             cube_y_norm=0.0,
-            x_goal_norm=0.5,  # Center
+            x_goal_norm=0.5, 
             y_goal_norm=0.5,
             target_error=np.zeros(4, dtype=np.float32),
         )
