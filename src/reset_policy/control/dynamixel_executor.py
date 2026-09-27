@@ -414,6 +414,8 @@ class DynamixelExecutor:
         for motor_id in self.motor_ids:
             if not sr.isAvailable(motor_id, sr.start_address, size):
                 print(f"[SYNCREAD] {key}: motor {motor_id} not available")
+                print(f"[SYNCREAD] {key}: attempting reboot of motor {motor_id}")
+                self._try_reboot(motor_id)
                 return None
 
             if size == 1:

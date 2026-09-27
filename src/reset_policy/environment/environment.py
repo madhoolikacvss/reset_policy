@@ -161,7 +161,16 @@ class ResetPolicyEnv(gym.Env):
 
         else:
             # Get current position
-            result = self.obs_builder.get_observation_result()
+            result = None
+            for obs_attempt in range(5):
+                result = self.obs_builder.get_observation_result()
+                if result.observation is not None:
+                    break
+                print(f"[RESET] Observation attempt {obs_attempt+1}/5 failed: "
+                    f"{result.error_message}. Retrying in 1s...")
+                time.sleep(1.0)
+
+
             if result.observation is None:
                 raise RuntimeError(f"Cannot get cube position during reset:{result.error_message}")
             
@@ -203,6 +212,15 @@ class ResetPolicyEnv(gym.Env):
                 f"Hardware error detected during reset: {result.error_message}. "
                 f"Motor IDs: {result.hardware_error_ids}"
             )
+
+        result = None
+        for obs_attempt in range(5):
+            result = self.obs_builder.get_observation_result()
+            if result.observation is not None:
+                break
+            print(f"[RESET] Observation attempt {obs_attempt+1}/5 failed: "
+                f"{result.error_message}. Retrying in 1s...")
+            time.sleep(1.0)
         
         if result.observation is None:
             raise RuntimeError(f"Failed to get observation during reset: {result.error_message}")
