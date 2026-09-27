@@ -86,6 +86,9 @@ class RewardFunction:
         self.velocity_k = 150.0
         self.velocity_window = 3       # smooth over 3 steps
         self.dt = 0.8
+        self.v_target_mag = 0.005   # target speed magnitude (m/s)
+        self.speed_k = 200
+
         self.cube_history = []
 
         self.vx_actual = 0.0
@@ -116,30 +119,59 @@ class RewardFunction:
         distance = np.sqrt((cube_x - goal_x) ** 2 + (cube_y - goal_y) ** 2)
         return float(np.exp(-self.distance_scale * distance))
 
-    def velocity_reward(self, cube_x, cube_y):
+    # def velocity_reward(self, cube_x, cube_y):
+    #     self.cube_history.append((cube_x, cube_y))
+    #     if len(self.cube_history) > self.velocity_window:
+    #         self.cube_history.pop(0)
+        
+    #     if len(self.cube_history) < self.velocity_window:
+    #         self.vx_actual = 0.0
+    #         self.vy_actual = 0.0
+    #         self.v_error = 0.0
+    #         return 0.0
+        
+    #     x_now, y_now = self.cube_history[-1]
+    #     x_old, y_old = self.cube_history[0]
+    #     dt_total = self.dt * (len(self.cube_history) - 1)
+        
+    #     vx = (x_now - x_old) / dt_total
+    #     vy = (y_now - y_old) / dt_total
+        
+    #     v_error = np.sqrt((vx - self.v_target[0])**2 + (vy - self.v_target[1])**2)
+    #     self.vx_actual = vx
+    #     self.vy_actual = vy
+
+    #     self.v_error = v_error
+    #     return float(np.exp(-self.velocity_k * v_error))
+
+    def speed_reward(self, cube_x, cube_y):
         self.cube_history.append((cube_x, cube_y))
         if len(self.cube_history) > self.velocity_window:
             self.cube_history.pop(0)
-        
+
         if len(self.cube_history) < self.velocity_window:
             self.vx_actual = 0.0
             self.vy_actual = 0.0
-            self.v_error = 0.0
+            self.speed_actual = 0.0
+            self.speed_error = 0.0
             return 0.0
-        
+
         x_now, y_now = self.cube_history[-1]
         x_old, y_old = self.cube_history[0]
         dt_total = self.dt * (len(self.cube_history) - 1)
-        
+
         vx = (x_now - x_old) / dt_total
         vy = (y_now - y_old) / dt_total
-        
-        v_error = np.sqrt((vx - self.v_target[0])**2 + (vy - self.v_target[1])**2)
+
+        speed = np.sqrt(vx**2 + vy**2)
+        speed_error = abs(speed - self.v_target_mag)   # scalar, direction-free
+
         self.vx_actual = vx
         self.vy_actual = vy
+        self.speed_actual = speed
+        self.speed_error = speed_error
 
-        self.v_error = v_error
-        return float(np.exp(-self.velocity_k * v_error))
+        return float(np.exp(-self.speed_k * speed_error))
 
     def current_change_penalty(self, motor_currents: Sequence[float]) -> float:
         """Penalty for sudden current changes (0 to -0.1)."""
@@ -197,7 +229,8 @@ class RewardFunction:
         Tension: 0 to -0.3
         """
         distance = self.distance_reward(cube_x, cube_y, goal_x, goal_y)
-        velocity = self.velocity_reward(cube_x, cube_y) * self.velocity_weight
+        # velocity = self.velocity_reward(cube_x, cube_y) * self.velocity_weight
+        velocity = self.speed_reward(cube_x, cube_y)
         change_penalty = self.current_change_penalty(motor_currents)
         hardware_penalty = self.hardware_error_penalty_value(hardware_error)
         tension = self.tension_penalty(motor_currents)
