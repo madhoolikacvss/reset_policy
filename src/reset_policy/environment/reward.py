@@ -34,7 +34,7 @@ class RewardFunction:
     def __init__(
         self,
         # Distance reward
-        distance_scale: float = 3.0,  # Controls decay rate (larger = decays faster)
+        distance_scale: float = 10.0,  # Controls decay rate (larger = decays faster)
         
         # Current change
         current_change_weight: float = 0.1,
