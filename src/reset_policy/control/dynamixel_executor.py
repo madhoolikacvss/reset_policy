@@ -48,8 +48,8 @@ TORQUE_DISABLE = config.dynamixel.torque_disable
 MAX_ENCODER_DELTA = config.dynamixel.max_encoder_delta
 MAX_ENCODER_TRAVEL = config.dynamixel.max_encoder_travel
 
-# Valid hardware error bits (Voltage, Temp, Shock, Overload)
-VALID_HW_ERROR_BITS = 0x01 | 0x04 | 0x10 | 0x20
+# Valid hardware error bits
+VALID_HW_ERROR_BITS = 0x01 | 0x04 | 0x10 | 0x20 | 0x08
 
 # Position corruption threshold
 POSITION_CORRUPTION_THRESHOLD = 15000
@@ -164,7 +164,13 @@ class DynamixelExecutor:
 
     # Raw read operations
     def _read_raw(self, motor_id, address, size, signed=False):
-        """Generic read with retry for both packet and port-level errors."""
+        """Generic read with retry for both packet and port-level errors.
+
+        On a packet error (error != 0), the status packet's error byte is
+        decoded and printed, then the motor is rebooted to try to clear
+        the fault. Rebooting handles common transient errors (voltage
+        dropout, overheating, overload).
+        """
         try:
             if not hasattr(self, 'port') or self.port is None or not self.port.is_open:
                 return None
@@ -191,6 +197,11 @@ class DynamixelExecutor:
                 if comm == COMM_SUCCESS and error == 0:
                     return value
 
+                # ---------------- Packet error handling ----------------
+                if comm == COMM_SUCCESS and error != 0:
+                    self._print_status_packet(motor_id, error)
+                    self._try_reboot(motor_id)
+
                 if attempt < 2:
                     time.sleep(0.02)
 
@@ -201,6 +212,88 @@ class DynamixelExecutor:
                     time.sleep(0.1)
         return None
 
+    def _print_status_packet(self, motor_id, error_byte):
+        """
+        Decode and print the error byte returned in a status packet.
+
+        Status packet format (Protocol 2.0):
+            0xFF 0xFF 0xFD 0x00 ID LEN_L LEN_H 0x55 ERR P1 P2 ... CRC_L CRC_H
+
+        Error byte:
+            Bit 7  (0x80): Alert — hardware issue exists. Read Hardware
+                        Error Status (address 70) to see which.
+            Bits 6~0:      Error Number (enumerated):
+                0x01 = Result Fail
+                0x02 = Instruction Error
+                0x03 = CRC Error
+                0x04 = Data Range Error
+                0x05 = Data Length Error
+                0x06 = Data Limit Error
+                0x07 = Access Error
+        """
+        error_number = error_byte & 0x7F
+        alert = bool(error_byte & 0x80)
+
+        error_names = {
+            0x01: "Result Fail",
+            0x02: "Instruction Error",
+            0x03: "CRC Error",
+            0x04: "Data Range Error",
+            0x05: "Data Length Error",
+            0x06: "Data Limit Error",
+            0x07: "Access Error",
+        }
+
+        print(f"\n[STATUS PACKET] Motor {motor_id} returned error byte "
+            f"0x{error_byte:02X} ({error_byte:08b}b)")
+
+        if error_number == 0:
+            print(f"  Error Number: 0x00 (no instruction-processing error)")
+        else:
+            name = error_names.get(error_number, f"Unknown error 0x{error_number:02X}")
+            print(f"  Error Number: 0x{error_number:02X} ({name})")
+
+        if alert:
+            print(f"  Alert bit SET — hardware issue. "
+                f"Read Hardware Error Status (addr 70) for details.")
+            
+    def _try_reboot(self, motor_id):
+        """
+        Reboot a motor and re-initialize it.
+        Always called on packet error (software or hardware).
+        """
+        print(f"  Attempting reboot of Motor {motor_id}...")
+        dxl_comm_result = self.packet.reboot(self.port, motor_id)
+
+        if dxl_comm_result != COMM_SUCCESS:
+            print(f"  Communication Error: {self.packet.getTxRxResult(dxl_comm_result)}")
+            return False
+
+        print(f"  Successfully rebooted Dynamixel ID: {motor_id}.")
+
+        # Wait for boot to complete
+        time.sleep(0.5)
+
+        # Re-initialize: torque off → set mode → torque on
+        try:
+            self.write1(motor_id, ADDR_TORQUE_ENABLE, TORQUE_DISABLE)
+            self.write1(motor_id, ADDR_OPERATING_MODE, EXTENDED_POSITION_MODE)
+            self.write1(motor_id, ADDR_TORQUE_ENABLE, TORQUE_ENABLE)
+
+            # Sync target to current position so the first write
+            # after reboot doesn't command a big jump.
+            pos = self.read_position(motor_id)
+            if pos is not None:
+                self.targets[motor_id] = pos
+                print(f"  Motor {motor_id} re-initialized (target synced to {pos}).")
+            else:
+                print(f"  Motor {motor_id} re-initialized (could not read position).")
+        except Exception as e:
+            print(f"  Motor {motor_id} re-init failed: {e}")
+            return False
+
+        return True
+    
     def _read1_raw(self, motor_id, address):
         """Read 1 byte."""
         return self._read_raw(motor_id, address, 1)
@@ -411,11 +504,17 @@ class DynamixelExecutor:
 
     # Write operations
     def write1(self, motor_id, address, value):
-        """Write 1 byte with error checking."""
+        """Write 1 byte with error checking.
+
+        On a packet error, decode the status packet, print it, and try
+        a reboot to clear transient faults.
+        """
         comm, error = self.packet.write1ByteTxRx(self.port, motor_id, address, value)
         if comm != COMM_SUCCESS:
             raise RuntimeError(f"Motor {motor_id}: {self.packet.getTxRxResult(comm)}")
         if error != 0:
+            self._print_status_packet(motor_id, error)
+            self._try_reboot(motor_id)
             raise RuntimeError(f"Motor {motor_id}: {self.packet.getRxPacketError(error)}")
 
     def _write_goal_position_direct(self, motor_id, target_position):
@@ -711,8 +810,8 @@ class DynamixelExecutor:
     def log_motor_diagnostics(self, motor_id, reason="periodic", packet_error=None, hardware_status=None):
         """Log diagnostic data for one motor."""
         timestamp = datetime.now().isoformat()
-        telemetry_all = self._get_all_telemetry()
-        telemetry = telemetry_all[motor_id]
+        # telemetry = self._get_motor_telemetry(motor_id)
+        telemetry = self._get_all_telemetry()
 
         if hardware_status is None:
             hardware_status = telemetry["hardware_status"]
