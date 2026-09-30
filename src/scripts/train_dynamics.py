@@ -1,8 +1,14 @@
 """
 PETS-style 1-step forward dynamics model for the cube-string system.
 
-Inputs:  [cube_x, cube_y, action_m16, action_m17, action_m18, action_m19]
-Outputs: [delta_cube_x, delta_cube_y]
+Inputs (14 dims):
+    [cube_x, cube_y,
+     action_m16, action_m17, action_m18, action_m19,
+     obs_motor_16_pos_delta_norm ... obs_motor_19_pos_delta_norm,
+     obs_motor_16_current_norm  ... obs_motor_19_current_norm]
+
+Outputs (2 dims):
+    [delta_cube_x, delta_cube_y]
 
 Model:   ensemble of 5 MLPs (3 layers, 200 units, Swish)
 Loss:    MSE on delta
@@ -10,6 +16,10 @@ Loss:    MSE on delta
 Validation:
     - Split by episode (not by step) to avoid leakage
     - Report RMSE in physical units + goal-directedness check
+
+Usage:
+    python scripts/train_dynamics_model.py
+    python scripts/train_dynamics_model.py --epochs 100 --ensemble 5
 """
 
 import argparse
@@ -35,6 +45,14 @@ OUT_DIR = Path(
 INPUT_COLS = [
     "cube_x", "cube_y",
     "action_m16", "action_m17", "action_m18", "action_m19",
+    "obs_motor_16_pos_delta_norm",
+    "obs_motor_17_pos_delta_norm",
+    "obs_motor_18_pos_delta_norm",
+    "obs_motor_19_pos_delta_norm",
+    "obs_motor_16_current_norm",
+    "obs_motor_17_current_norm",
+    "obs_motor_18_current_norm",
+    "obs_motor_19_current_norm",
 ]
 OUTPUT_COLS = ["cube_x", "cube_y"]
 
@@ -51,15 +69,19 @@ def load_all_episodes(log_dir: Path, verbose: bool = True):
         raise FileNotFoundError(f"No episodes found in {log_dir}")
 
     Xs, Ys, eps = [], [], []
+    skipped_files = 0
+    skipped_rows = 0
 
     for ep_idx, f in enumerate(files):
         df = pd.read_csv(f)
         if len(df) < 2:
+            skipped_files += 1
             continue
 
         missing = [c for c in INPUT_COLS + OUTPUT_COLS if c not in df.columns]
         if missing:
             print(f"WARNING: {f.name} missing columns {missing}, skipping")
+            skipped_files += 1
             continue
 
         for t in range(len(df) - 1):
@@ -69,6 +91,7 @@ def load_all_episodes(log_dir: Path, verbose: bool = True):
             delta = cube_next - cube_t
 
             if not (np.isfinite(s_t).all() and np.isfinite(delta).all()):
+                skipped_rows += 1
                 continue
 
             Xs.append(s_t)
@@ -80,10 +103,9 @@ def load_all_episodes(log_dir: Path, verbose: bool = True):
     episode_ids = np.array(eps, dtype=np.int64)
 
     if verbose:
-        print(f"Loaded {len(files)} files, "
-              f"{len(X)} transitions, {X.shape[1]}-dim inputs")
-        print(f"  X range: [{X.min(axis=0)}, {X.max(axis=0)}]")
-        print(f"  Y range: [{Y.min(axis=0)}, {Y.max(axis=0)}]")
+        print(f"Loaded {len(files)} files ({skipped_files} skipped), "
+              f"{len(X)} transitions ({skipped_rows} rows skipped for NaN), "
+              f"{X.shape[1]}-dim inputs")
 
     return X, Y, episode_ids
 
@@ -367,8 +389,8 @@ def main():
 
     for epoch in range(1, args.epochs + 1):
         tr_loss = train_one_epoch(model, optimizer, train_loader, device)
-        val_mse, val_mae, _ = evaluate(model, X_val_n, Y_val_n, device)
-        val_mse_mean = float(val_mse.mean())
+        val_mse_n, val_mae_n, _ = evaluate(model, X_val_n, Y_val_n, device)
+        val_mse_mean = float(val_mse_n.mean())
 
         if val_mse_mean < best_val_mse:
             best_val_mse = val_mse_mean
@@ -379,7 +401,7 @@ def main():
             print(f"epoch {epoch:4d}  "
                   f"train MSE (norm): {tr_loss:.5f}  "
                   f"val MSE (norm): {val_mse_mean:.5f}  "
-                  f"val MAE (norm): {val_mae.mean():.5f}")
+                  f"val MAE (norm): {val_mae_n.mean():.5f}")
 
     elapsed = time.time() - t0
     print(f"\nTraining done in {elapsed:.1f}s")
