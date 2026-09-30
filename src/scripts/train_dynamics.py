@@ -9,11 +9,7 @@ Loss:    MSE on delta
 
 Validation:
     - Split by episode (not by step) to avoid leakage
-    - Report MSE per motor + goal-directedness check
-
-Usage:
-    python scripts/train_dynamics_model.py
-    python scripts/train_dynamics_model.py --epochs 100 --ensemble 5
+    - Report RMSE in physical units + goal-directedness check
 """
 
 import argparse
@@ -40,22 +36,16 @@ INPUT_COLS = [
     "cube_x", "cube_y",
     "action_m16", "action_m17", "action_m18", "action_m19",
 ]
-OUTPUT_COLS = ["cube_x", "cube_y"]   # we predict the delta of these
+OUTPUT_COLS = ["cube_x", "cube_y"]
 
-VAL_FRACTION = 0.10          # 10% of episodes held out
+VAL_FRACTION = 0.10
 SEED = 0
 
 
 # ---------------- Data loading ----------------
 
 def load_all_episodes(log_dir: Path, verbose: bool = True):
-    """
-    Load all episodes, build (s_t, a_t) -> delta_s_t pairs.
-    Returns:
-        X: (N, 6) float32
-        Y: (N, 2) float32  (delta of cube_x, cube_y)
-        episode_ids: (N,) int  (which episode each row came from)
-    """
+    """Build (s_t, a_t) -> delta_s_t pairs from all episode CSVs."""
     files = sorted(log_dir.glob("episode_*_motors.csv"))
     if not files:
         raise FileNotFoundError(f"No episodes found in {log_dir}")
@@ -64,25 +54,20 @@ def load_all_episodes(log_dir: Path, verbose: bool = True):
 
     for ep_idx, f in enumerate(files):
         df = pd.read_csv(f)
-
-        # Need at least 2 rows to make one transition
         if len(df) < 2:
             continue
 
-        # Check required columns
         missing = [c for c in INPUT_COLS + OUTPUT_COLS if c not in df.columns]
         if missing:
             print(f"WARNING: {f.name} missing columns {missing}, skipping")
             continue
 
-        # Build pairs: row t (input state + action) -> row t+1 (target cube pos)
         for t in range(len(df) - 1):
             s_t = df.iloc[t][INPUT_COLS].to_numpy(dtype=np.float32)
             cube_next = df.iloc[t + 1][OUTPUT_COLS].to_numpy(dtype=np.float32)
             cube_t = df.iloc[t][OUTPUT_COLS].to_numpy(dtype=np.float32)
             delta = cube_next - cube_t
 
-            # Skip rows with NaN
             if not (np.isfinite(s_t).all() and np.isfinite(delta).all()):
                 continue
 
@@ -131,7 +116,7 @@ class MLP(nn.Module):
         prev = in_dim
         for _ in range(depth):
             layers.append(nn.Linear(prev, hidden))
-            layers.append(nn.SiLU())  # Swish
+            layers.append(nn.SiLU())
             prev = hidden
         layers.append(nn.Linear(prev, out_dim))
         self.net = nn.Sequential(*layers)
@@ -151,23 +136,18 @@ class Ensemble(nn.Module):
         ])
 
     def forward(self, x):
-        """
-        Returns: (n_members, batch, out_dim) predictions.
-        """
         return torch.stack([m(x) for m in self.members], dim=0)
 
     def predict_mean(self, x):
-        """Mean prediction across ensemble members."""
         preds = self.forward(x)
         return preds.mean(dim=0)
 
     def predict_std(self, x):
-        """Disagreement (std) across ensemble members."""
         preds = self.forward(x)
         return preds.std(dim=0)
 
 
-# ---------------- Training ----------------
+# ---------------- Training / Evaluation ----------------
 
 def train_one_epoch(model, optimizer, loader, device):
     model.train()
@@ -177,7 +157,7 @@ def train_one_epoch(model, optimizer, loader, device):
         xb = xb.to(device)
         yb = yb.to(device)
 
-        preds = model(xb)                # (n_members, batch, out_dim)
+        preds = model(xb)                      # (n_members, batch, out_dim)
         loss = ((preds - yb.unsqueeze(0)) ** 2).mean()
 
         optimizer.zero_grad()
@@ -192,11 +172,10 @@ def train_one_epoch(model, optimizer, loader, device):
 
 @torch.no_grad()
 def evaluate(model, X, Y, device):
+    """Returns MSE, MAE (in whatever units X/Y are in) and predictions."""
     model.eval()
     X_t = torch.tensor(X, dtype=torch.float32, device=device)
-    Y_t = torch.tensor(Y, dtype=torch.float32, device=device)
 
-    # Split into chunks to avoid OOM
     batch = 4096
     preds_all = []
     for i in range(0, len(X_t), batch):
@@ -209,34 +188,17 @@ def evaluate(model, X, Y, device):
     return mse, mae, pred
 
 
-# ---------------- Goal-directedness check ----------------
+# ---------------- Goal-directedness ----------------
 
 def goal_directedness_report(X_val, Y_val, pred_val):
-    """
-    X_val columns: [cube_x, cube_y, a16..19]
-    Y_val columns: [delta_x, delta_y]
-
-    We don't have the goal in X_val, so we infer it from the episode-level
-    behavior. For now, we just report:
-        - Fraction of steps where |pred_delta| moves cube "inward"
-          (proxy: reduce the magnitude of cube position)
-        - Fraction of steps where ground truth does the same
-
-    The real goal-directedness check requires the goal, which is loaded
-    separately in `check_goal_direction`.
-    """
-    pred_delta = pred_val
-    true_delta = Y_val
-
-    # Approximate "moved toward center" by checking the sign change of
-    # cube_x * delta_x (moving toward x=0)
+    """Proxy check: does the model move the cube toward the origin?"""
     cube_x = X_val[:, 0]
     cube_y = X_val[:, 1]
 
-    pred_toward_x = (cube_x * pred_delta[:, 0]) < 0
-    true_toward_x = (cube_x * true_delta[:, 0]) < 0
-    pred_toward_y = (cube_y * pred_delta[:, 1]) < 0
-    true_toward_y = (cube_y * true_delta[:, 1]) < 0
+    pred_toward_x = (cube_x * pred_val[:, 0]) < 0
+    true_toward_x = (cube_x * Y_val[:, 0]) < 0
+    pred_toward_y = (cube_y * pred_val[:, 1]) < 0
+    true_toward_y = (cube_y * Y_val[:, 1]) < 0
 
     print(f"\nGoal-directedness proxy (toward origin):")
     print(f"  X-axis  — model: {pred_toward_x.mean():.2%}, "
@@ -246,41 +208,31 @@ def goal_directedness_report(X_val, Y_val, pred_val):
 
 
 def check_goal_direction(X_val_raw, Y_val, pred_val, episode_ids_val, log_dir):
-    """
-    Load each episode's goal from episodes.csv, then compute whether the
-    model's predicted next cube position is closer to the goal than the
-    current cube position.
-
-    X_val_raw columns: [cube_x, cube_y, a16, a17, a18, a19]
-    episode_ids_val: array of episode indices (0-based, matching sorted file order)
-    """
+    """Compare model-predicted and ground-truth goal-directedness."""
     episodes_csv = log_dir.parent / "episodes.csv"
     if not episodes_csv.exists():
         print(f"\n[goal check] episodes.csv not found at {episodes_csv}")
         return
 
-    # Load episodes.csv and dedupe by episode number (keep last occurrence)
     ep_df = pd.read_csv(episodes_csv)
     ep_df = ep_df.drop_duplicates(subset="episode", keep="last")
     ep_df = ep_df.set_index("episode")
 
-    # Build a mapping from episode-index -> goal
-    # We need to know which actual episode number each val-index corresponds to.
-    # The sorted file order in motor_logs is episode_0001, episode_0002, ...
-    # But your files might not be contiguous. Rebuild the file list.
     motor_files = sorted(log_dir.glob("episode_*_motors.csv"))
 
-    counts = {"closer": 0, "farther": 0, "equal": 0, "skipped": 0}
+    counts = {
+        "closer": 0, "farther": 0, "equal": 0,
+        "true_closer": 0, "true_farther": 0, "true_equal": 0,
+        "skipped": 0,
+    }
 
     for i in range(len(X_val_raw)):
-        # episode_ids_val[i] is the file index (0-based) among sorted files
         file_idx = int(episode_ids_val[i])
         if file_idx >= len(motor_files):
             counts["skipped"] += 1
             continue
 
-        # Extract the episode number from the filename
-        fname = motor_files[file_idx].stem  # e.g. "episode_0001_motors"
+        fname = motor_files[file_idx].stem
         try:
             ep_num = int(fname.split("_")[1])
         except (IndexError, ValueError):
@@ -305,17 +257,16 @@ def check_goal_direction(X_val_raw, Y_val, pred_val, episode_ids_val, log_dir):
         dy = float(pred_val[i, 1])
 
         d_before = np.hypot(cx - goal_x, cy - goal_y)
-        d_after = np.hypot(cx + dx - goal_x, cy + dy - goal_y)
 
-                # Model prediction
+        # Model-predicted next position
         d_after_pred = np.hypot(cx + dx - goal_x, cy + dy - goal_y)
 
-        # Ground truth next position
-        cx_next = cx + float(Y_val[i, 0])
-        cy_next = cy + float(Y_val[i, 1])
-        d_after_true = np.hypot(cx_next - goal_x, cy_next - goal_y)
+        # Ground-truth next position
+        d_after_true = np.hypot(
+            cx + float(Y_val[i, 0]) - goal_x,
+            cy + float(Y_val[i, 1]) - goal_y,
+        )
 
-        # Count for both
         if d_after_pred < d_before - 1e-9:
             counts["closer"] += 1
         elif d_after_pred > d_before + 1e-9:
@@ -330,21 +281,22 @@ def check_goal_direction(X_val_raw, Y_val, pred_val, episode_ids_val, log_dir):
         else:
             counts["true_equal"] += 1
 
-
-    total = counts["closer"] + counts["farther"] + counts["equal"]
-    if total == 0:
-        print("\n[goal check] no valid rows")
-        print(f"  skipped: {counts['skipped']}")
-        return
+    total_pred = counts["closer"] + counts["farther"] + counts["equal"]
+    total_true = counts["true_closer"] + counts["true_farther"] + counts["true_equal"]
 
     print(f"\nGoal-directedness (using episodes.csv goals):")
-    print(f"  Predicted step moves closer to goal: "
-          f"{counts['closer'] / total:.2%}")
-    print(f"  Predicted step moves farther from goal: "
-          f"{counts['farther'] / total:.2%}")
-    print(f"  Predicted step moves same distance: "
-          f"{counts['equal'] / total:.2%}")
+    if total_pred > 0:
+        print(f"  Model predictions:")
+        print(f"    closer  : {counts['closer'] / total_pred:.2%}")
+        print(f"    farther : {counts['farther'] / total_pred:.2%}")
+        print(f"    equal   : {counts['equal'] / total_pred:.2%}")
+    if total_true > 0:
+        print(f"  Ground truth:")
+        print(f"    closer  : {counts['true_closer'] / total_true:.2%}")
+        print(f"    farther : {counts['true_farther'] / total_true:.2%}")
+        print(f"    equal   : {counts['true_equal'] / total_true:.2%}")
     print(f"  Skipped: {counts['skipped']} rows")
+
 
 # ---------------- Main ----------------
 
@@ -375,7 +327,7 @@ def main():
     print(f"Train: {len(X_tr)} samples  "
           f"Val: {len(X_val)} samples (episodes: {val_eps})")
 
-    # ---- Normalization (compute on train only) ----
+    # ---- Normalization (train stats only) ----
     X_mean = X_tr.mean(axis=0)
     X_std = X_tr.std(axis=0) + 1e-8
     Y_mean = Y_tr.mean(axis=0)
@@ -386,7 +338,7 @@ def main():
     Y_tr_n = (Y_tr - Y_mean) / Y_std
     Y_val_n = (Y_val - Y_mean) / Y_std
 
-    # ---- DataLoaders ----
+    # ---- DataLoader ----
     train_ds = TensorDataset(
         torch.tensor(X_tr_n, dtype=torch.float32),
         torch.tensor(Y_tr_n, dtype=torch.float32),
@@ -415,12 +367,13 @@ def main():
 
     for epoch in range(1, args.epochs + 1):
         tr_loss = train_one_epoch(model, optimizer, train_loader, device)
-        val_mse, val_mae, pred_val_n = evaluate(model, X_val_n, Y_val_n, device)
+        val_mse, val_mae, _ = evaluate(model, X_val_n, Y_val_n, device)
         val_mse_mean = float(val_mse.mean())
 
         if val_mse_mean < best_val_mse:
             best_val_mse = val_mse_mean
-            best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
+            best_state = {k: v.cpu().clone()
+                          for k, v in model.state_dict().items()}
 
         if epoch % 5 == 0 or epoch == 1:
             print(f"epoch {epoch:4d}  "
@@ -437,31 +390,38 @@ def main():
         model.load_state_dict(best_state)
 
     # ---- Evaluate in physical units ----
-    val_mse, val_mae, pred_val_n = evaluate(model, X_val_n, Y_val_n, device)
+    _, _, pred_val_n = evaluate(model, X_val_n, Y_val_n, device)
     pred_val = pred_val_n * Y_std + Y_mean
 
+    residual = pred_val - Y_val
+    val_mse_phys = (residual ** 2).mean(axis=0)
+    val_mae_phys = np.abs(residual).mean(axis=0)
+
     print(f"\nValidation MSE (physical units):")
-    print(f"  Δcube_x: {val_mse[0]:.8f} m²  "
-          f"(RMSE {np.sqrt(val_mse[0]) * 1000:.3f} mm)")
-    print(f"  Δcube_y: {val_mse[1]:.8f} m²  "
-          f"(RMSE {np.sqrt(val_mse[1]) * 1000:.3f} mm)")
+    print(f"  Δcube_x: {val_mse_phys[0]:.12f} m²  "
+          f"(RMSE {np.sqrt(val_mse_phys[0]) * 1000:.4f} mm)")
+    print(f"  Δcube_y: {val_mse_phys[1]:.12f} m²  "
+          f"(RMSE {np.sqrt(val_mse_phys[1]) * 1000:.4f} mm)")
 
     print(f"Validation MAE (physical units):")
-    print(f"  Δcube_x: {val_mae[0] * 1000:.3f} mm")
-    print(f"  Δcube_y: {val_mae[1] * 1000:.3f} mm")
+    print(f"  Δcube_x: {val_mae_phys[0] * 1000:.4f} mm")
+    print(f"  Δcube_y: {val_mae_phys[1] * 1000:.4f} mm")
 
-    # Reference: how big are the deltas?
+    # Baseline (predict mean)
+    baseline_mse = ((Y_val - Y_val.mean(axis=0)) ** 2).mean(axis=0)
+    print(f"\nBaseline (predict mean) RMSE:")
+    print(f"  Δcube_x: {np.sqrt(baseline_mse[0]) * 1000:.4f} mm")
+    print(f"  Δcube_y: {np.sqrt(baseline_mse[1]) * 1000:.4f} mm")
+
     print(f"\nDelta magnitude reference:")
-    print(f"  Mean |Δcube_x|: {np.abs(Y_val[:, 0]).mean() * 1000:.3f} mm")
-    print(f"  Mean |Δcube_y|: {np.abs(Y_val[:, 1]).mean() * 1000:.3f} mm")
+    print(f"  Mean |Δcube_x|: {np.abs(Y_val[:, 0]).mean() * 1000:.4f} mm")
+    print(f"  Mean |Δcube_y|: {np.abs(Y_val[:, 1]).mean() * 1000:.4f} mm")
 
     # ---- Goal-directedness ----
     goal_directedness_report(X_val, Y_val, pred_val)
 
-    # Also try the episodes.csv-based check
-    # Rebuild the episode_ids for the val set
+    # Rebuild the episode index list for the val set
     X_all_eps = ep_ids[np.isin(ep_ids, val_eps)]
-    # X_val_raw = original unscaled X_val
     check_goal_direction(X_val, Y_val, pred_val, X_all_eps, MOTOR_LOG_DIR)
 
     # ---- Save ----
