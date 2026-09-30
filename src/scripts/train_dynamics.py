@@ -247,56 +247,94 @@ def goal_directedness_report(X_val, Y_val, pred_val):
 
 def check_goal_direction(X_val_raw, Y_val, pred_val, episode_ids_val, log_dir):
     """
-    Load each episode's goal from episodes.csv, compute whether the
-    model's predicted next cube position is closer to the goal than
-    the current cube position.
+    Load each episode's goal from episodes.csv, then compute whether the
+    model's predicted next cube position is closer to the goal than the
+    current cube position.
+
+    X_val_raw columns: [cube_x, cube_y, a16, a17, a18, a19]
+    episode_ids_val: array of episode indices (0-based, matching sorted file order)
     """
     episodes_csv = log_dir.parent / "episodes.csv"
     if not episodes_csv.exists():
         print(f"\n[goal check] episodes.csv not found at {episodes_csv}")
         return
 
+    # Load episodes.csv and dedupe by episode number (keep last occurrence)
     ep_df = pd.read_csv(episodes_csv)
+    ep_df = ep_df.drop_duplicates(subset="episode", keep="last")
     ep_df = ep_df.set_index("episode")
 
-    # X_val_raw columns: [cube_x, cube_y, a16..19]
-    # We need to know which episode each val row came from.
-    # We'll just recompute using the val row's cube position + the episode goal.
+    # Build a mapping from episode-index -> goal
+    # We need to know which actual episode number each val-index corresponds to.
+    # The sorted file order in motor_logs is episode_0001, episode_0002, ...
+    # But your files might not be contiguous. Rebuild the file list.
+    motor_files = sorted(log_dir.glob("episode_*_motors.csv"))
 
-    # For simplicity, group by "which episode the row belongs to" using
-    # the fact that cube positions within an episode are close.
-    # Better: re-derive from episode_ids_val.
-    # The caller provides episode_ids_val aligned with X_val_raw.
-
-    counts = {"closer": 0, "farther": 0, "equal": 0}
+    counts = {"closer": 0, "farther": 0, "equal": 0, "skipped": 0}
 
     for i in range(len(X_val_raw)):
-        ep_num = episode_ids_val[i] + 1     # CSV episodes are 1-indexed
-        if ep_num not in ep_df.index:
-            continue
-        goal_x = ep_df.loc[ep_num, "goal_x"]
-        goal_y = ep_df.loc[ep_num, "goal_y"]
-        if not np.isfinite(goal_x) or not np.isfinite(goal_y):
+        # episode_ids_val[i] is the file index (0-based) among sorted files
+        file_idx = int(episode_ids_val[i])
+        if file_idx >= len(motor_files):
+            counts["skipped"] += 1
             continue
 
-        cx = X_val_raw[i, 0]
-        cy = X_val_raw[i, 1]
-        dx = pred_val[i, 0]
-        dy = pred_val[i, 1]
+        # Extract the episode number from the filename
+        fname = motor_files[file_idx].stem  # e.g. "episode_0001_motors"
+        try:
+            ep_num = int(fname.split("_")[1])
+        except (IndexError, ValueError):
+            counts["skipped"] += 1
+            continue
+
+        if ep_num not in ep_df.index:
+            counts["skipped"] += 1
+            continue
+
+        row = ep_df.loc[ep_num]
+        goal_x = float(row["goal_x"])
+        goal_y = float(row["goal_y"])
+
+        if not np.isfinite(goal_x) or not np.isfinite(goal_y):
+            counts["skipped"] += 1
+            continue
+
+        cx = float(X_val_raw[i, 0])
+        cy = float(X_val_raw[i, 1])
+        dx = float(pred_val[i, 0])
+        dy = float(pred_val[i, 1])
 
         d_before = np.hypot(cx - goal_x, cy - goal_y)
         d_after = np.hypot(cx + dx - goal_x, cy + dy - goal_y)
 
-        if d_after < d_before - 1e-6:
+                # Model prediction
+        d_after_pred = np.hypot(cx + dx - goal_x, cy + dy - goal_y)
+
+        # Ground truth next position
+        cx_next = cx + float(Y_val[i, 0])
+        cy_next = cy + float(Y_val[i, 1])
+        d_after_true = np.hypot(cx_next - goal_x, cy_next - goal_y)
+
+        # Count for both
+        if d_after_pred < d_before - 1e-9:
             counts["closer"] += 1
-        elif d_after > d_before + 1e-6:
+        elif d_after_pred > d_before + 1e-9:
             counts["farther"] += 1
         else:
             counts["equal"] += 1
 
-    total = sum(counts.values())
+        if d_after_true < d_before - 1e-9:
+            counts["true_closer"] += 1
+        elif d_after_true > d_before + 1e-9:
+            counts["true_farther"] += 1
+        else:
+            counts["true_equal"] += 1
+
+
+    total = counts["closer"] + counts["farther"] + counts["equal"]
     if total == 0:
         print("\n[goal check] no valid rows")
+        print(f"  skipped: {counts['skipped']}")
         return
 
     print(f"\nGoal-directedness (using episodes.csv goals):")
@@ -306,7 +344,7 @@ def check_goal_direction(X_val_raw, Y_val, pred_val, episode_ids_val, log_dir):
           f"{counts['farther'] / total:.2%}")
     print(f"  Predicted step moves same distance: "
           f"{counts['equal'] / total:.2%}")
-
+    print(f"  Skipped: {counts['skipped']} rows")
 
 # ---------------- Main ----------------
 
