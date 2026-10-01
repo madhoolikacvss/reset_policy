@@ -1,0 +1,63 @@
+nohup: ignoring input
+/home/madhoolika/miniconda3/envs/reset/lib/python3.14/site-packages/torch/cuda/__init__.py:1061: UserWarning: Can't initialize NVML
+  raw_cnt = _raw_device_count_nvml()
+Device: cuda
+Loaded 154 files (8 skipped), 23666 transitions (0 rows skipped for NaN), 14-dim inputs
+Train: 21844 samples  Val: 1822 samples (episodes: [np.int64(4), np.int64(7), np.int64(13), np.int64(27), np.int64(39), np.int64(45), np.int64(74), np.int64(78), np.int64(90), np.int64(93), np.int64(97), np.int64(119), np.int64(121), np.int64(138)])
+Ensemble of 5 MLPs, 419,010 params total
+epoch    1  train MSE (norm): 0.99145  val MSE (norm): 0.59679  val MAE (norm): 0.41718
+epoch    5  train MSE (norm): 0.97303  val MSE (norm): 0.59039  val MAE (norm): 0.41724
+epoch   10  train MSE (norm): 0.95784  val MSE (norm): 0.58766  val MAE (norm): 0.41863
+epoch   15  train MSE (norm): 0.93441  val MSE (norm): 0.59231  val MAE (norm): 0.42047
+epoch   20  train MSE (norm): 0.92352  val MSE (norm): 0.58725  val MAE (norm): 0.41451
+epoch   25  train MSE (norm): 0.91509  val MSE (norm): 0.59368  val MAE (norm): 0.41965
+epoch   30  train MSE (norm): 0.90552  val MSE (norm): 0.61166  val MAE (norm): 0.42996
+epoch   35  train MSE (norm): 0.88580  val MSE (norm): 0.61405  val MAE (norm): 0.43041
+epoch   40  train MSE (norm): 0.86747  val MSE (norm): 0.63312  val MAE (norm): 0.43933
+epoch   45  train MSE (norm): 0.84474  val MSE (norm): 0.62185  val MAE (norm): 0.43408
+epoch   50  train MSE (norm): 0.81029  val MSE (norm): 0.65973  val MAE (norm): 0.45387
+epoch   55  train MSE (norm): 0.79148  val MSE (norm): 0.63818  val MAE (norm): 0.44704
+epoch   60  train MSE (norm): 0.74522  val MSE (norm): 0.63259  val MAE (norm): 0.44097
+epoch   65  train MSE (norm): 0.71237  val MSE (norm): 0.69900  val MAE (norm): 0.46660
+epoch   70  train MSE (norm): 0.66958  val MSE (norm): 0.71376  val MAE (norm): 0.47146
+epoch   75  train MSE (norm): 0.61930  val MSE (norm): 0.76667  val MAE (norm): 0.48522
+epoch   80  train MSE (norm): 0.56679  val MSE (norm): 0.75156  val MAE (norm): 0.48409
+epoch   85  train MSE (norm): 0.51564  val MSE (norm): 0.81432  val MAE (norm): 0.50292
+epoch   90  train MSE (norm): 0.46555  val MSE (norm): 0.80762  val MAE (norm): 0.50224
+epoch   95  train MSE (norm): 0.41469  val MSE (norm): 0.87917  val MAE (norm): 0.51847
+epoch  100  train MSE (norm): 0.36498  val MSE (norm): 0.87722  val MAE (norm): 0.52016
+
+Training done in 28.1s
+Best val MSE (norm): 0.57928
+
+Validation MSE (physical units):
+  Δcube_x: 0.000064809137 m²  (RMSE 8.0504 mm)
+  Δcube_y: 0.000014118323 m²  (RMSE 3.7574 mm)
+Validation MAE (physical units):
+  Δcube_x: 4.5086 mm
+  Δcube_y: 1.9267 mm
+
+Baseline (predict mean) RMSE:
+  Δcube_x: 8.2357 mm
+  Δcube_y: 3.8175 mm
+
+Delta magnitude reference:
+  Mean |Δcube_x|: 4.5781 mm
+  Mean |Δcube_y|: 1.9789 mm
+
+Goal-directedness proxy (toward origin):
+  X-axis  — model: 44.95%, ground truth: 50.27%
+  Y-axis  — model: 50.38%, ground truth: 48.74%
+
+Goal-directedness (using episodes.csv goals):
+  Model predictions:
+    closer  : 44.13%
+    farther : 55.87%
+    equal   : 0.00%
+  Ground truth:
+    closer  : 49.34%
+    farther : 50.66%
+    equal   : 0.00%
+  Skipped: 0 rows
+
+Saved model to /home/madhoolika/workspace/reset_policy/src/logs/dynamics_model/dynamics_model.pt

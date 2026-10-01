@@ -1,1 +1,1563 @@
 nohup: ignoring input
+Logging to: /home/madhoolika/workspace/reset_policy/src/logs
+Board bounds: x=[-0.500, -0.070], y=[-0.710, -0.120] m
+Cell size: 0.010 m
+Initializing camera...
+Initializing AprilTag tracker...
+Dynamixel connected
+Motor 16: 1200, [TxRxResult] Communication success!, 
+Motor 17: 1200, [TxRxResult] Communication success!, 
+Motor 18: 1240, [TxRxResult] Communication success!, 
+Motor 19: 1200, [TxRxResult] Communication success!, 
+Initializing Dynamixels...
+Motor 16: initial position = -5106
+Motor 17: initial position = 9552
+Motor 18: initial position = 2686
+Motor 19: initial position = -6245
+Initialization complete.
+SafetyFilter initialized:
+  Motors: [16, 17, 18, 19]
+  Horizontal pair: [16, 17]
+  Vertical pair: [18, 19]
+  Max pair current: 1000.0 mA
+  Max single current: 600.0 mA
+  Max position: 8000.0
+  Voltage: 3.5-4.0 V
+  Temperature: 45.0°C (critical: 55.0°C)
+  Current load: 400.0mA heavy, 700.0mA critical
+  Min tension: 5 mA
+  Single motor tension: 300.0mA (high: 500.0, critical: 700.0)
+  Features: current=True, position=True, tension=True, voltage=True, current_aware=True, tension_constraint=True, temperature=True, single_tension=True, stuck_motor=True
+Renderer: Headless mode (saving to /home/madhoolika/workspace/reset_policy/src/logs/renderings)
+  Save every 1 episodes
+  Board: 59.0x43.0 cm
+
+Environment initialized successfully
+/home/madhoolika/miniconda3/envs/reset/lib/python3.14/site-packages/torch/cuda/__init__.py:1061: UserWarning: Can't initialize NVML
+  raw_cnt = _raw_device_count_nvml()
+Training on cuda
+Logging to: /home/madhoolika/workspace/reset_policy/src/logs
+
+Resuming from checkpoint: /home/madhoolika/workspace/reset_policy/checkpoints/ppo_checkpoint_164.pth
+/home/madhoolika/miniconda3/envs/reset/lib/python3.14/site-packages/torch/cuda/__init__.py:1061: UserWarning: Can't initialize NVML
+  raw_cnt = _raw_device_count_nvml()
+Resuming from episode 164
+
+
+Checking motor positions...
+  Motor 16: current=-5106, initial=-5106, delta=0
+  Motor 17: current=9551, initial=9552, delta=1
+  Motor 18: current=2685, initial=2686, delta=1
+  Motor 19: current=-6245, initial=-6245, delta=0
+  Waiting for motors to settle...
+  Verifying positions...
+    Motor 16: -5106 (initial: -5106)
+    Motor 17: 9551 (initial: 9552)
+    Motor 18: 2686 (initial: 2686)
+    Motor 19: -6245 (initial: -6245)
+  Motor reset complete
+
+[VIDEO] Recorder initialized (serial=243623021110)
+[VIDEO] Recording episode 165 -> /home/madhoolika/workspace/reset_policy/src/logs/videos/episode_0165.mp4
+
+================ ENV RESET ================
+[DEBUG] Raw cube_state from tracker: x=-0.2419, y=-0.1477, yaw=-103.5382
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6002, y_norm=0.9531
+Current position: (-0.242, -0.148)
+Board bounds: x=[-0.500, -0.070], y=[-0.710, -0.120]
+Using fixed goal #1: (-0.119, -0.528)
+Goal position: (-0.119, -0.528)
+Waiting for motors to settle before reading positions...
+[DEBUG] Raw cube_state from tracker: x=-0.2416, y=-0.1480, yaw=-103.5213
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6009, y_norm=0.9526
+[DEBUG] Raw cube_state from tracker: x=-0.2414, y=-0.1480, yaw=-103.4863
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6014, y_norm=0.9525
+
+[SAFETY INTERVENTION #1]
+  Reason: tension_too_low
+  Detail: Motor 18: slack (0mA) -> forced pull
+  Raw action: [ 0.48104748  0.9471979  -0.5950381   0.8960216 ]
+  Safe action: [0.48104748 0.9471979  0.2        0.8960216 ]
+  Modification: [0.        0.        0.7950381 0.       ]
+
+============================================================
+RL ACTION #1
+raw action: [0.48104748 0.9471979  0.2        0.8960216 ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2490, y=-0.1419, yaw=-105.5135
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.5837, y_norm=0.9629
+==========goal and obs reading from env============
+x, y are:  -0.24900086267626576 -0.1419175398311472
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.10 (reason: tension_too_low, magnitude: 0.199)
+
+[SAFETY INTERVENTION #2]
+  Reason: tension_too_low
+  Detail: Motor 19: slack (7mA) -> forced pull
+  Raw action: [-0.52239174  0.3493041   0.19882254  0.12109918]
+  Safe action: [0.2        0.3493041  0.19882254 0.2       ]
+  Modification: [0.7223917  0.         0.         0.07890082]
+
+============================================================
+RL ACTION #2
+raw action: [0.2        0.3493041  0.19882254 0.2       ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2460, y=-0.1490, yaw=-104.2854
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.5906, y_norm=0.9508
+==========goal and obs reading from env============
+x, y are:  -0.24602946959313887 -0.1490181688595787
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.10 (reason: tension_too_low, magnitude: 0.200)
+
+[SAFETY INTERVENTION #3]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (0mA) -> forced pull
+  Raw action: [-0.24227689  0.661033    0.9038116   0.34091568]
+  Safe action: [0.2        0.661033   0.9038116  0.34091568]
+  Modification: [0.4422769 0.        0.        0.       ]
+
+============================================================
+RL ACTION #3
+raw action: [0.2        0.661033   0.9038116  0.34091568]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2244, y=-0.1800, yaw=-96.5989
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6409, y_norm=0.8983
+==========goal and obs reading from env============
+x, y are:  -0.2244093950986656 -0.17999024680604286
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.05 (reason: tension_too_low, magnitude: 0.111)
+
+============================================================
+RL ACTION #4
+raw action: [ 0.8261253   0.5159245  -0.94710696 -0.6306542 ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2080, y=-0.2014, yaw=-89.9524
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6790, y_norm=0.8620
+==========goal and obs reading from env============
+x, y are:  -0.20802317786198954 -0.20139427862677461
+goal is:  -0.119 -0.528
+
+============================================================
+RL ACTION #5
+raw action: [-0.43025324  0.53859806 -0.02110454  0.95933354]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2253, y=-0.1793, yaw=-95.6464
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6388, y_norm=0.8994
+==========goal and obs reading from env============
+x, y are:  -0.22533680284999286 -0.17934727455410884
+goal is:  -0.119 -0.528
+
+============================================================
+RL ACTION #6
+raw action: [0.9541847  0.7614712  0.4531139  0.33500567]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2166, y=-0.1917, yaw=-92.8337
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6592, y_norm=0.8785
+==========goal and obs reading from env============
+x, y are:  -0.21656128137474828 -0.19165733143338662
+goal is:  -0.119 -0.528
+
+============================================================
+RL ACTION #7
+raw action: [ 0.64588535 -0.7005086   0.7349858  -0.29253328]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2149, y=-0.1937, yaw=-92.4759
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6630, y_norm=0.8750
+==========goal and obs reading from env============
+x, y are:  -0.21489358605148226 -0.19374843868343594
+goal is:  -0.119 -0.528
+
+============================================================
+RL ACTION #8
+raw action: [ 0.20915602  0.873456   -0.36778605 -0.37557074]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2063, y=-0.2033, yaw=-89.9577
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6829, y_norm=0.8588
+==========goal and obs reading from env============
+x, y are:  -0.20633201885874858 -0.2033255948030053
+goal is:  -0.119 -0.528
+
+============================================================
+RL ACTION #9
+raw action: [-0.98505527  0.33831388  0.02467148  0.7416581 ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2177, y=-0.1895, yaw=-93.6181
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6566, y_norm=0.8822
+==========goal and obs reading from env============
+x, y are:  -0.21767781721799115 -0.18950445590426387
+goal is:  -0.119 -0.528
+
+============================================================
+RL ACTION #10
+raw action: [-0.7294173  -0.05655039  0.7027919  -0.5222557 ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2212, y=-0.1805, yaw=-96.0690
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6484, y_norm=0.8974
+==========goal and obs reading from env============
+x, y are:  -0.22119493828693204 -0.18053970417985685
+goal is:  -0.119 -0.528
+
+============================================================
+RL ACTION #11
+raw action: [-0.75554    -0.1066195   0.17584197 -0.5477954 ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2190, y=-0.1793, yaw=-95.9282
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6534, y_norm=0.8995
+==========goal and obs reading from env============
+x, y are:  -0.21903411323493466 -0.179284879596917
+goal is:  -0.119 -0.528
+
+[SAFETY INTERVENTION #4]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (0mA) -> forced pull
+  Raw action: [-0.9783022  -0.48177308 -0.27271315 -0.77105236]
+  Safe action: [ 0.2        -0.48177308 -0.27271315 -0.77105236]
+  Modification: [1.1783022 0.        0.        0.       ]
+
+============================================================
+RL ACTION #12
+raw action: [ 0.2        -0.48177308 -0.27271315 -0.77105236]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2150, y=-0.1813, yaw=-95.0512
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6629, y_norm=0.8961
+==========goal and obs reading from env============
+x, y are:  -0.21496781133048126 -0.18132334093507943
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.14 (reason: tension_too_low, magnitude: 0.295)
+
+============================================================
+RL ACTION #13
+raw action: [-0.7859821   0.55350196  0.26985592  0.06087674]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2184, y=-0.1760, yaw=-96.0428
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6550, y_norm=0.9051
+==========goal and obs reading from env============
+x, y are:  -0.21836304117306227 -0.1759913149311815
+goal is:  -0.119 -0.528
+
+[SAFETY INTERVENTION #5]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (0mA) -> forced pull
+  Raw action: [-0.7675707   0.24291375 -0.6896862   0.62119424]
+  Safe action: [ 0.2         0.24291375 -0.6896862   0.62119424]
+  Modification: [0.96757066 0.         0.         0.        ]
+
+============================================================
+RL ACTION #14
+raw action: [ 0.2         0.24291375 -0.6896862   0.62119424]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2210, y=-0.1739, yaw=-96.2216
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6488, y_norm=0.9087
+==========goal and obs reading from env============
+x, y are:  -0.22103178300675996 -0.17385000440511342
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.12 (reason: tension_too_low, magnitude: 0.242)
+
+============================================================
+RL ACTION #15
+raw action: [-0.9565807   0.39495572  0.91030824  0.2749526 ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2173, y=-0.1758, yaw=-96.0727
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6575, y_norm=0.9054
+==========goal and obs reading from env============
+x, y are:  -0.21728689413608215 -0.17579448634168765
+goal is:  -0.119 -0.528
+
+[SAFETY INTERVENTION #6]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (0mA) -> forced pull
+  Raw action: [-0.9884582  -0.8206252  -0.6428988  -0.80903935]
+  Safe action: [ 0.2        -0.8206252  -0.6428988  -0.80903935]
+  Modification: [1.1884582 0.        0.        0.       ]
+
+============================================================
+RL ACTION #16
+raw action: [ 0.2        -0.8206252  -0.6428988  -0.80903935]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2190, y=-0.1748, yaw=-96.2798
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6534, y_norm=0.9070
+==========goal and obs reading from env============
+x, y are:  -0.2190454423993864 -0.17484348100134078
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.14 (reason: tension_too_low, magnitude: 0.297)
+
+[SAFETY INTERVENTION #7]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (0mA) -> forced pull
+  Raw action: [-0.9945988  -0.82402015  0.76355696  0.5429262 ]
+  Safe action: [ 0.2        -0.82402015  0.76355696  0.5429262 ]
+  Modification: [1.1945988 0.        0.        0.       ]
+
+============================================================
+RL ACTION #17
+raw action: [ 0.2        -0.82402015  0.76355696  0.5429262 ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2160, y=-0.1783, yaw=-96.0868
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6604, y_norm=0.9012
+==========goal and obs reading from env============
+x, y are:  -0.21600693082191758 -0.1782646753183229
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.14 (reason: tension_too_low, magnitude: 0.299)
+
+[SAFETY INTERVENTION #8]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (0mA) -> forced pull
+  Raw action: [-0.63102734  0.25414655  0.4985799  -0.1617334 ]
+  Safe action: [ 0.2         0.25414655  0.4985799  -0.1617334 ]
+  Modification: [0.8310273 0.        0.        0.       ]
+
+============================================================
+RL ACTION #18
+raw action: [ 0.2         0.25414655  0.4985799  -0.1617334 ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2148, y=-0.1791, yaw=-96.0430
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6632, y_norm=0.8998
+==========goal and obs reading from env============
+x, y are:  -0.21481334986550138 -0.1791101070042686
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.10 (reason: tension_too_low, magnitude: 0.208)
+
+[SAFETY INTERVENTION #9]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (0mA) -> forced pull
+  Raw action: [-0.59602773  0.74361813  0.7886187   0.47486   ]
+  Safe action: [0.2        0.74361813 0.7886187  0.47486   ]
+  Modification: [0.7960277 0.        0.        0.       ]
+
+============================================================
+RL ACTION #19
+raw action: [0.2        0.74361813 0.7886187  0.47486   ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2130, y=-0.1799, yaw=-96.0124
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6674, y_norm=0.8985
+==========goal and obs reading from env============
+x, y are:  -0.21301868334667706 -0.17990133887496948
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.10 (reason: tension_too_low, magnitude: 0.199)
+
+[SAFETY INTERVENTION #10]
+  Reason: current_aware_scaling
+  Detail: Motor 18: 361mA -> scale=0.68
+  Raw action: [-0.80081904 -0.47966263  0.46649033 -0.17697607]
+  Safe action: [-0.80081904 -0.47966263  0.31628045 -0.17697607]
+  Modification: [ 0.          0.         -0.15020987  0.        ]
+
+[SAFETY INTERVENTION #11]
+  Reason: voltage_low
+  Detail: Motor 18: 3.5V -> scale=0.10
+  Raw action: [-0.80081904 -0.47966263  0.46649033 -0.17697607]
+  Safe action: [-0.80081904 -0.47966263  0.03162805 -0.17697607]
+  Modification: [ 0.         0.        -0.4348623  0.       ]
+
+============================================================
+RL ACTION #20
+raw action: [-0.80081904 -0.47966263  0.03162805 -0.17697607]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2129, y=-0.1800, yaw=-96.0027
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6676, y_norm=0.8982
+==========goal and obs reading from env============
+x, y are:  -0.21292858282434352 -0.1800336629606223
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.04 (reason: voltage_low, magnitude: 0.109)
+
+[SAFETY INTERVENTION #12]
+  Reason: motor_stuck
+  Detail: Motor 18 stuck: current=404mA, no movement
+  Raw action: [-0.594761    0.42136198  0.87116504 -0.5963434 ]
+  Safe action: [-0.594761    0.42136198 -0.5        -0.5963434 ]
+  Modification: [ 0.        0.       -1.371165  0.      ]
+
+[SAFETY INTERVENTION #13]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (0mA) -> forced pull
+  Raw action: [-0.594761    0.42136198  0.87116504 -0.5963434 ]
+  Safe action: [ 0.2         0.42136198 -0.5        -0.5963434 ]
+  Modification: [ 0.794761  0.       -1.371165  0.      ]
+
+============================================================
+RL ACTION #21
+raw action: [ 0.2         0.42136198 -0.5        -0.5963434 ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2130, y=-0.1799, yaw=-96.0214
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6674, y_norm=0.8984
+==========goal and obs reading from env============
+x, y are:  -0.21303725166648696 -0.1799332015593359
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.26 (reason: tension_too_low, magnitude: 0.541)
+
+[SAFETY INTERVENTION #14]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (0mA) -> forced pull
+  Raw action: [-0.7421968   0.04024795 -0.13686907 -0.9825891 ]
+  Safe action: [ 0.2         0.04024795 -0.13686907 -0.9825891 ]
+  Modification: [0.9421968 0.        0.        0.       ]
+
+============================================================
+RL ACTION #22
+raw action: [ 0.2         0.04024795 -0.13686907 -0.9825891 ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2102, y=-0.1778, yaw=-95.9070
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6740, y_norm=0.9020
+==========goal and obs reading from env============
+x, y are:  -0.21020018662978124 -0.17779908059816582
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.11 (reason: tension_too_low, magnitude: 0.236)
+
+============================================================
+RL ACTION #23
+raw action: [0.89283884 0.8901191  0.58253455 0.8177523 ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2074, y=-0.1809, yaw=-95.1455
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6805, y_norm=0.8968
+==========goal and obs reading from env============
+x, y are:  -0.20737170616444217 -0.18086634570149016
+goal is:  -0.119 -0.528
+
+[SAFETY INTERVENTION #15]
+  Reason: current_aware_scaling
+  Detail: Motor 17: 322mA -> scale=0.76
+  Raw action: [-0.44707933  0.73066986 -0.35135308  0.7245716 ]
+  Safe action: [-0.44707933  0.5523864  -0.35135308  0.7245716 ]
+  Modification: [ 0.         -0.17828345  0.          0.        ]
+
+[SAFETY INTERVENTION #16]
+  Reason: tension_safety
+  Detail: Motor 17: 322mA -> scale=0.70
+  Raw action: [-0.44707933  0.73066986 -0.35135308  0.7245716 ]
+  Safe action: [-0.44707933  0.38667047 -0.35135308  0.7245716 ]
+  Modification: [ 0.        -0.3439994  0.         0.       ]
+
+============================================================
+RL ACTION #24
+raw action: [-0.44707933  0.38667047 -0.35135308  0.7245716 ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2118, y=-0.1771, yaw=-96.0150
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6703, y_norm=0.9031
+==========goal and obs reading from env============
+x, y are:  -0.21176690137695448 -0.177143211622662
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.04 (reason: tension_safety, magnitude: 0.086)
+
+[SAFETY INTERVENTION #17]
+  Reason: motor_stuck
+  Detail: Motor 17 stuck: current=453mA, no movement
+  Raw action: [-0.996358   0.5504426  0.5469045 -0.976072 ]
+  Safe action: [-0.996358  -0.5        0.5469045 -0.976072 ]
+  Modification: [ 0.        -1.0504426  0.         0.       ]
+
+============================================================
+RL ACTION #25
+raw action: [-0.996358  -0.5        0.5469045 -0.976072 ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2088, y=-0.1793, yaw=-95.8234
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6773, y_norm=0.8995
+==========goal and obs reading from env============
+x, y are:  -0.20875690058602014 -0.17929325666265786
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.11 (reason: motor_stuck, magnitude: 0.263)
+
+[SAFETY INTERVENTION #18]
+  Reason: voltage_low
+  Detail: Motor 18: 3.8V -> scale=0.18
+  Raw action: [-0.9626397  -0.5736772  -0.2226242   0.73598534]
+  Safe action: [-0.9626397  -0.13768256 -0.04007235  0.73598534]
+  Modification: [0.         0.43599463 0.18255185 0.        ]
+
+[SAFETY INTERVENTION #19]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (0mA) -> forced pull
+  Raw action: [-0.9626397  -0.5736772  -0.2226242   0.73598534]
+  Safe action: [ 0.2        -0.13768256 -0.04007235  0.73598534]
+  Modification: [1.1626397  0.43599463 0.18255185 0.        ]
+
+============================================================
+RL ACTION #26
+raw action: [ 0.2        -0.13768256 -0.04007235  0.73598534]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2090, y=-0.1793, yaw=-95.8856
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6768, y_norm=0.8995
+==========goal and obs reading from env============
+x, y are:  -0.20896498722481516 -0.17930160330663086
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.21 (reason: tension_too_low, magnitude: 0.445)
+
+[SAFETY INTERVENTION #20]
+  Reason: current_aware_scaling
+  Detail: Motor 18: 331mA -> scale=0.74
+  Raw action: [-0.79334855 -0.81056523  0.32808036  0.7438502 ]
+  Safe action: [-0.79334855 -0.81056523  0.2421233   0.7438502 ]
+  Modification: [ 0.          0.         -0.08595705  0.        ]
+
+[SAFETY INTERVENTION #21]
+  Reason: voltage_low
+  Detail: Motor 18: 3.9V -> scale=0.24
+  Raw action: [-0.79334855 -0.81056523  0.32808036  0.7438502 ]
+  Safe action: [-0.79334855 -0.14590172  0.05810961  0.7438502 ]
+  Modification: [ 0.          0.6646635  -0.26997074  0.        ]
+
+[SAFETY INTERVENTION #22]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (0mA) -> forced pull
+  Raw action: [-0.79334855 -0.81056523  0.32808036  0.7438502 ]
+  Safe action: [ 0.2        -0.14590172  0.05810961  0.7438502 ]
+  Modification: [ 0.99334854  0.6646635  -0.26997074  0.        ]
+
+============================================================
+RL ACTION #27
+raw action: [ 0.2        -0.14590172  0.05810961  0.7438502 ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2094, y=-0.1787, yaw=-95.8631
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6757, y_norm=0.9006
+==========goal and obs reading from env============
+x, y are:  -0.20942922784437729 -0.17867376733627166
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.23 (reason: tension_too_low, magnitude: 0.482)
+
+[SAFETY INTERVENTION #23]
+  Reason: motor_stuck
+  Detail: Motor 19 stuck: current=415mA, no movement
+  Raw action: [-0.92913383  0.9323464  -0.16476011 -0.98507154]
+  Safe action: [-0.92913383  0.9323464  -0.16476011 -0.5       ]
+  Modification: [0.         0.         0.         0.48507154]
+
+[SAFETY INTERVENTION #24]
+  Reason: voltage_low
+  Detail: Motor 18: 3.9V -> scale=0.24
+  Raw action: [-0.92913383  0.9323464  -0.16476011 -0.98507154]
+  Safe action: [-0.92913383  0.9323464  -0.03954244 -0.5       ]
+  Modification: [0.         0.         0.12521768 0.48507154]
+
+============================================================
+RL ACTION #28
+raw action: [-0.92913383  0.9323464  -0.03954244 -0.5       ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2089, y=-0.1790, yaw=-95.8146
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6769, y_norm=0.8999
+[SYNCREAD] positions attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] currents attempt 1/2: [TxRxResult] There is no status packet!
+==========goal and obs reading from env============
+x, y are:  -0.20892832603869765 -0.17904793412423953
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.06 (reason: voltage_low, magnitude: 0.153)
+[SYNCREAD] positions attempt 1/2: [TxRxResult] There is no status packet!
+
+[SAFETY INTERVENTION #25]
+  Reason: motor_stuck
+  Detail: Motor 17 stuck: current=455mA, no movement
+  Raw action: [-0.55303466 -0.89019173 -0.7032357   0.5381385 ]
+  Safe action: [-0.55303466 -0.5        -0.7032357   0.5381385 ]
+  Modification: [0.         0.39019173 0.         0.        ]
+
+[SAFETY INTERVENTION #26]
+  Reason: voltage_low
+  Detail: Motor 18: 3.5V -> scale=0.10
+  Raw action: [-0.55303466 -0.89019173 -0.7032357   0.5381385 ]
+  Safe action: [-0.55303466 -0.05       -0.07032357  0.5381385 ]
+  Modification: [0.        0.8401917 0.6329121 0.       ]
+
+[SAFETY INTERVENTION #27]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (0mA) -> forced pull
+  Raw action: [-0.55303466 -0.89019173 -0.7032357   0.5381385 ]
+  Safe action: [ 0.2        -0.05       -0.07032357  0.5381385 ]
+  Modification: [0.75303465 0.8401917  0.6329121  0.        ]
+
+============================================================
+RL ACTION #29
+raw action: [ 0.2        -0.05       -0.07032357  0.5381385 ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2090, y=-0.1790, yaw=-95.8496
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6768, y_norm=0.9000
+==========goal and obs reading from env============
+x, y are:  -0.20896913859056915 -0.17899347361901594
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.27 (reason: tension_too_low, magnitude: 0.557)
+
+[SAFETY INTERVENTION #28]
+  Reason: motor_stuck
+  Detail: Motor 19 stuck: current=417mA, no movement
+  Raw action: [ 0.46877506  0.9434421   0.599646   -0.6262484 ]
+  Safe action: [ 0.46877506 -0.5         0.599646   -0.5       ]
+  Modification: [ 0.         -1.4434421   0.          0.12624842]
+
+[SAFETY INTERVENTION #29]
+  Reason: voltage_low
+  Detail: Motor 18: 3.7V -> scale=0.12
+  Raw action: [ 0.46877506  0.9434421   0.599646   -0.6262484 ]
+  Safe action: [ 0.46877506 -0.08999999  0.07195754 -0.5       ]
+  Modification: [ 0.         -1.0334421  -0.52768844  0.12624842]
+
+============================================================
+RL ACTION #30
+raw action: [ 0.46877506 -0.08999999  0.07195754 -0.5       ]
+============================================================
+[SYNCREAD] torque attempt 1/2: [TxRxResult] There is no status packet!
+[DEBUG] Raw cube_state from tracker: x=-0.2090, y=-0.1790, yaw=-95.8319
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6768, y_norm=0.9000
+==========goal and obs reading from env============
+x, y are:  -0.2089768129597877 -0.17902908673461002
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.17 (reason: voltage_low, magnitude: 0.422)
+[SYNCREAD] voltages attempt 1/2: [TxRxResult] There is no status packet!
+
+[SAFETY INTERVENTION #30]
+  Reason: motor_stuck
+  Detail: Motor 17 stuck: current=413mA, no movement
+  Raw action: [-0.8146468  -0.11788023 -0.47981057  0.01460097]
+  Safe action: [-0.8146468  -0.5        -0.47981057  0.01460097]
+  Modification: [ 0.         -0.38211977  0.          0.        ]
+
+[SAFETY INTERVENTION #31]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (0mA) -> forced pull
+  Raw action: [-0.8146468  -0.11788023 -0.47981057  0.01460097]
+  Safe action: [ 0.2        -0.5        -0.47981057  0.01460097]
+  Modification: [ 1.0146468  -0.38211977  0.          0.        ]
+
+============================================================
+RL ACTION #31
+raw action: [ 0.2        -0.5        -0.47981057  0.01460097]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2114, y=-0.1770, yaw=-96.0202
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6712, y_norm=0.9034
+==========goal and obs reading from env============
+x, y are:  -0.21137110805768017 -0.17698208422335537
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.17 (reason: tension_too_low, magnitude: 0.349)
+
+============================================================
+RL ACTION #32
+raw action: [-0.48751402 -0.7231591  -0.62857175  0.83846164]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2161, y=-0.1769, yaw=-96.3375
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6601, y_norm=0.9035
+==========goal and obs reading from env============
+x, y are:  -0.21614529749808986 -0.17690652898977086
+goal is:  -0.119 -0.528
+
+============================================================
+RL ACTION #33
+raw action: [0.7251636  0.5185532  0.9491355  0.01562056]
+============================================================
+[SYNCREAD] pwm attempt 1/2: [TxRxResult] There is no status packet!
+[DEBUG] Raw cube_state from tracker: x=-0.2141, y=-0.1786, yaw=-96.0925
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6648, y_norm=0.9006
+==========goal and obs reading from env============
+x, y are:  -0.21414653633305486 -0.17864253281488923
+goal is:  -0.119 -0.528
+[SYNCREAD] voltages attempt 1/2: [TxRxResult] There is no status packet!
+
+[SAFETY INTERVENTION #32]
+  Reason: voltage_critical
+  Detail: Motor 18: 3.4V -> scale=0.15
+  Raw action: [-0.71354824  0.8953702  -0.8381958   0.5478752 ]
+  Safe action: [-0.71354824  0.8953702  -0.12572938  0.5478752 ]
+  Modification: [0.        0.        0.7124664 0.       ]
+
+[SAFETY INTERVENTION #33]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (7mA) -> forced pull
+  Raw action: [-0.71354824  0.8953702  -0.8381958   0.5478752 ]
+  Safe action: [ 0.2         0.8953702  -0.12572938  0.5478752 ]
+  Modification: [0.91354823 0.         0.7124664  0.        ]
+
+============================================================
+RL ACTION #34
+raw action: [ 0.2         0.8953702  -0.12572938  0.5478752 ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2139, y=-0.1783, yaw=-96.0138
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6653, y_norm=0.9011
+==========goal and obs reading from env============
+x, y are:  -0.2139003769827979 -0.17832181970151817
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.20 (reason: tension_too_low, magnitude: 0.407)
+[SYNCREAD] positions attempt 1/2: [TxRxResult] There is no status packet!
+
+[SAFETY INTERVENTION #34]
+  Reason: motor_stuck
+  Detail: Motor 19 stuck: current=417mA, no movement
+  Raw action: [ 0.30122402 -0.672975   -0.3516213  -0.08601856]
+  Safe action: [ 0.30122402 -0.5        -0.3516213  -0.5       ]
+  Modification: [ 0.          0.172975    0.         -0.41398144]
+
+[SAFETY INTERVENTION #35]
+  Reason: voltage_critical
+  Detail: Motor 18: 3.4V -> scale=0.15
+  Raw action: [ 0.30122402 -0.672975   -0.3516213  -0.08601856]
+  Safe action: [ 0.30122402 -0.06000002 -0.0527432  -0.5       ]
+  Modification: [ 0.          0.612975    0.2988781  -0.41398144]
+
+============================================================
+RL ACTION #35
+raw action: [ 0.30122402 -0.06000002 -0.0527432  -0.5       ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2150, y=-0.1780, yaw=-95.9910
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6629, y_norm=0.9016
+==========goal and obs reading from env============
+x, y are:  -0.21497361842238005 -0.17804835485663967
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.13 (reason: voltage_critical, magnitude: 0.331)
+[SYNCREAD] positions attempt 1/2: [TxRxResult] There is no status packet!
+
+[SAFETY INTERVENTION #36]
+  Reason: motor_stuck
+  Detail: Motor 17 stuck: current=447mA, no movement
+  Raw action: [-0.9300175   0.70788234  0.8316337   0.5999197 ]
+  Safe action: [-0.9300175 -0.5        0.8316337  0.5999197]
+  Modification: [ 0.        -1.2078824  0.         0.       ]
+
+[SAFETY INTERVENTION #37]
+  Reason: current_aware_scaling
+  Detail: Motor 18: 334mA -> scale=0.73
+  Raw action: [-0.9300175   0.70788234  0.8316337   0.5999197 ]
+  Safe action: [-0.9300175 -0.5        0.6087559  0.5999197]
+  Modification: [ 0.        -1.2078824 -0.2228778  0.       ]
+
+[SAFETY INTERVENTION #38]
+  Reason: voltage_low
+  Detail: Motor 18: 3.6V -> scale=0.10
+  Raw action: [-0.9300175   0.70788234  0.8316337   0.5999197 ]
+  Safe action: [-0.9300175  -0.08999999  0.06087559  0.5999197 ]
+  Modification: [ 0.        -0.7978823 -0.7707581  0.       ]
+
+[SAFETY INTERVENTION #39]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (0mA) -> forced pull
+  Raw action: [-0.9300175   0.70788234  0.8316337   0.5999197 ]
+  Safe action: [ 0.2        -0.08999999  0.06087559  0.5999197 ]
+  Modification: [ 1.1300175 -0.7978823 -0.7707581  0.       ]
+
+============================================================
+RL ACTION #36
+raw action: [ 0.2        -0.08999999  0.06087559  0.5999197 ]
+============================================================
+[SYNCREAD] currents attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] voltages attempt 1/2: [TxRxResult] There is no status packet!
+[DEBUG] Raw cube_state from tracker: x=-0.2150, y=-0.1780, yaw=-96.0000
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6628, y_norm=0.9017
+==========goal and obs reading from env============
+x, y are:  -0.21498264472922057 -0.17797443640359373
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.32 (reason: tension_too_low, magnitude: 0.675)
+[SYNCREAD] temperatures attempt 1/2: [TxRxResult] There is no status packet!
+
+[SAFETY INTERVENTION #40]
+  Reason: motor_stuck
+  Detail: Motor 19 stuck: current=444mA, no movement
+  Raw action: [-0.84623706 -0.51406986 -0.33191428  0.7145169 ]
+  Safe action: [-0.84623706 -0.5        -0.33191428 -0.5       ]
+  Modification: [ 0.          0.01406986  0.         -1.2145169 ]
+
+[SAFETY INTERVENTION #41]
+  Reason: voltage_low
+  Detail: Motor 17: 3.8V -> scale=0.18
+  Raw action: [-0.84623706 -0.51406986 -0.33191428  0.7145169 ]
+  Safe action: [-0.84623706 -0.08999999 -0.33191428 -0.5       ]
+  Modification: [ 0.          0.42406988  0.         -1.2145169 ]
+
+[SAFETY INTERVENTION #42]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (0mA) -> forced pull
+  Raw action: [-0.84623706 -0.51406986 -0.33191428  0.7145169 ]
+  Safe action: [ 0.2        -0.08999999 -0.33191428 -0.5       ]
+  Modification: [ 1.0462371   0.42406988  0.         -1.2145169 ]
+
+============================================================
+RL ACTION #37
+raw action: [ 0.2        -0.08999999 -0.33191428 -0.5       ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2140, y=-0.1785, yaw=-95.9930
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6652, y_norm=0.9009
+==========goal and obs reading from env============
+x, y are:  -0.21397189915991166 -0.17846087244970316
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.32 (reason: tension_too_low, magnitude: 0.671)
+
+[SAFETY INTERVENTION #43]
+  Reason: motor_stuck
+  Detail: Motor 17 stuck: current=420mA, no movement
+  Raw action: [ 0.4820548   0.24236189 -0.9593435   0.93872505]
+  Safe action: [ 0.4820548  -0.5        -0.9593435   0.93872505]
+  Modification: [ 0.        -0.7423619  0.         0.       ]
+
+============================================================
+RL ACTION #38
+raw action: [ 0.4820548  -0.5        -0.9593435   0.93872505]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2185, y=-0.1783, yaw=-96.3417
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6545, y_norm=0.9012
+==========goal and obs reading from env============
+x, y are:  -0.21854818849502167 -0.17826564276313647
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.07 (reason: motor_stuck, magnitude: 0.186)
+
+[SAFETY INTERVENTION #44]
+  Reason: current_aware_scaling
+  Detail: Motor 19: 320mA -> scale=0.76
+  Raw action: [ 0.03717006  0.5694305  -0.45162195  0.32929158]
+  Safe action: [ 0.03717006  0.5694305  -0.45162195  0.2502616 ]
+  Modification: [ 0.          0.          0.         -0.07902998]
+
+[SAFETY INTERVENTION #45]
+  Reason: tension_safety
+  Detail: Motor 19: 320mA -> scale=0.70
+  Raw action: [ 0.03717006  0.5694305  -0.45162195  0.32929158]
+  Safe action: [ 0.03717006  0.5694305  -0.45162195  0.17518312]
+  Modification: [ 0.          0.          0.         -0.15410846]
+
+============================================================
+RL ACTION #39
+raw action: [ 0.03717006  0.5694305  -0.45162195  0.17518312]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2224, y=-0.1769, yaw=-96.5859
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6457, y_norm=0.9036
+==========goal and obs reading from env============
+x, y are:  -0.2223633613876454 -0.17686632871568997
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.02 (reason: tension_safety, magnitude: 0.039)
+
+[SAFETY INTERVENTION #46]
+  Reason: motor_stuck
+  Detail: Motor 17 stuck: current=449mA, no movement
+  Raw action: [-0.896976    0.80555177 -0.58790374  0.28350842]
+  Safe action: [-0.896976   -0.5        -0.58790374  0.28350842]
+  Modification: [ 0.        -1.3055518  0.         0.       ]
+
+============================================================
+RL ACTION #40
+raw action: [-0.896976   -0.5        -0.58790374  0.28350842]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2263, y=-0.1760, yaw=-96.8899
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6365, y_norm=0.9051
+==========goal and obs reading from env============
+x, y are:  -0.22631790551815412 -0.17597840747716698
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.13 (reason: motor_stuck, magnitude: 0.326)
+
+[SAFETY INTERVENTION #47]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (0mA) -> forced pull
+  Raw action: [-0.44416064 -0.58329856  0.5479234   0.9256006 ]
+  Safe action: [ 0.2        -0.58329856  0.5479234   0.9256006 ]
+  Modification: [0.6441606 0.        0.        0.       ]
+
+============================================================
+RL ACTION #41
+raw action: [ 0.2        -0.58329856  0.5479234   0.9256006 ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2247, y=-0.1780, yaw=-96.5031
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6402, y_norm=0.9017
+==========goal and obs reading from env============
+x, y are:  -0.2247151056429122 -0.17797520034028463
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.08 (reason: tension_too_low, magnitude: 0.161)
+
+[SAFETY INTERVENTION #48]
+  Reason: motor_stuck
+  Detail: Motor 19 stuck: current=473mA, no movement
+  Raw action: [-0.966679    0.90612924  0.41742286 -0.12229139]
+  Safe action: [-0.966679    0.90612924  0.41742286 -0.5       ]
+  Modification: [ 0.         0.         0.        -0.3777086]
+
+[SAFETY INTERVENTION #49]
+  Reason: current_aware_scaling
+  Detail: Motor 18: 311mA -> scale=0.78
+  Raw action: [-0.966679    0.90612924  0.41742286 -0.12229139]
+  Safe action: [-0.966679    0.90612924  0.32475498 -0.5       ]
+  Modification: [ 0.          0.         -0.09266788 -0.3777086 ]
+
+[SAFETY INTERVENTION #50]
+  Reason: voltage_low
+  Detail: Motor 18: 3.7V -> scale=0.12
+  Raw action: [-0.966679    0.90612924  0.41742286 -0.12229139]
+  Safe action: [-0.966679    0.90612924  0.03897061 -0.5       ]
+  Modification: [ 0.          0.         -0.37845224 -0.3777086 ]
+
+============================================================
+RL ACTION #42
+raw action: [-0.966679    0.90612924  0.03897061 -0.5       ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2256, y=-0.1770, yaw=-96.5977
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6381, y_norm=0.9034
+==========goal and obs reading from env============
+x, y are:  -0.22563191298345225 -0.17696610303374444
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.08 (reason: voltage_low, magnitude: 0.189)
+
+[SAFETY INTERVENTION #51]
+  Reason: current_aware_scaling
+  Detail: Motor 19: 317mA -> scale=0.77
+  Raw action: [-0.4496703  -0.61289966  0.9455489   0.6974939 ]
+  Safe action: [-0.4496703  -0.61289966  0.735637    0.53428036]
+  Modification: [ 0.          0.         -0.20991188 -0.16321355]
+
+[SAFETY INTERVENTION #52]
+  Reason: voltage_critical
+  Detail: Motor 18: 3.3V -> scale=0.15
+  Raw action: [-0.4496703  -0.61289966  0.9455489   0.6974939 ]
+  Safe action: [-0.4496703  -0.61289966  0.11034556  0.53428036]
+  Modification: [ 0.          0.         -0.83520335 -0.16321355]
+
+[SAFETY INTERVENTION #53]
+  Reason: tension_safety
+  Detail: Motor 19: 317mA -> scale=0.70
+  Raw action: [-0.4496703  -0.61289966  0.9455489   0.6974939 ]
+  Safe action: [-0.4496703  -0.61289966  0.07724189  0.37399626]
+  Modification: [ 0.          0.         -0.868307   -0.32349765]
+
+[SAFETY INTERVENTION #54]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (9mA) -> forced pull
+  Raw action: [-0.4496703  -0.61289966  0.9455489   0.6974939 ]
+  Safe action: [ 0.2        -0.61289966  0.07724189  0.37399626]
+  Modification: [ 0.6496703   0.         -0.868307   -0.32349765]
+
+============================================================
+RL ACTION #43
+raw action: [ 0.2        -0.61289966  0.07724189  0.37399626]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2251, y=-0.1776, yaw=-96.4733
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6393, y_norm=0.9024
+==========goal and obs reading from env============
+x, y are:  -0.22508705409399038 -0.17759351788817687
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.22 (reason: tension_too_low, magnitude: 0.460)
+
+[SAFETY INTERVENTION #55]
+  Reason: motor_stuck
+  Detail: Motor 19 stuck: current=427mA, no movement
+  Raw action: [-0.6294864   0.21684381 -0.56721324  0.47433907]
+  Safe action: [-0.6294864   0.21684381 -0.56721324 -0.5       ]
+  Modification: [ 0.          0.          0.         -0.97433907]
+
+[SAFETY INTERVENTION #56]
+  Reason: voltage_critical
+  Detail: Motor 18: 3.4V -> scale=0.15
+  Raw action: [-0.6294864   0.21684381 -0.56721324  0.47433907]
+  Safe action: [-0.6294864   0.21684381 -0.08508199 -0.5       ]
+  Modification: [ 0.          0.          0.48213124 -0.97433907]
+
+============================================================
+RL ACTION #44
+raw action: [-0.6294864   0.21684381 -0.08508199 -0.5       ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2252, y=-0.1772, yaw=-96.5276
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6390, y_norm=0.9030
+==========goal and obs reading from env============
+x, y are:  -0.22522431885352806 -0.17723358755660443
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.15 (reason: voltage_critical, magnitude: 0.364)
+
+[SAFETY INTERVENTION #57]
+  Reason: current_aware_scaling
+  Detail: Motor 18: 329mA -> scale=0.74
+  Raw action: [ 0.04932133 -0.34738225  0.60769457 -0.8732538 ]
+  Safe action: [ 0.04932133 -0.34738225  0.45090938 -0.8732538 ]
+  Modification: [ 0.          0.         -0.15678519  0.        ]
+
+[SAFETY INTERVENTION #58]
+  Reason: voltage_critical
+  Detail: Motor 18: 3.4V -> scale=0.15
+  Raw action: [ 0.04932133 -0.34738225  0.60769457 -0.8732538 ]
+  Safe action: [ 0.04932133 -0.34738225  0.06763641 -0.8732538 ]
+  Modification: [ 0.          0.         -0.54005814  0.        ]
+
+[SAFETY INTERVENTION #59]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (0mA) -> forced pull
+  Raw action: [ 0.04932133 -0.34738225  0.60769457 -0.8732538 ]
+  Safe action: [ 0.2        -0.34738225  0.06763641 -0.8732538 ]
+  Modification: [ 0.15067868  0.         -0.54005814  0.        ]
+
+============================================================
+RL ACTION #45
+raw action: [ 0.2        -0.34738225  0.06763641 -0.8732538 ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2246, y=-0.1780, yaw=-96.4498
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6404, y_norm=0.9017
+==========goal and obs reading from env============
+x, y are:  -0.22464159969889474 -0.17800741509681034
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.08 (reason: tension_too_low, magnitude: 0.173)
+[SYNCREAD] positions attempt 1/2: [TxRxResult] There is no status packet!
+
+[SAFETY INTERVENTION #60]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (0mA) -> forced pull
+  Raw action: [-0.90978235 -0.1011426  -0.65921646  0.55624545]
+  Safe action: [ 0.2        -0.1011426  -0.65921646  0.55624545]
+  Modification: [1.1097823 0.        0.        0.       ]
+
+============================================================
+RL ACTION #46
+raw action: [ 0.2        -0.1011426  -0.65921646  0.55624545]
+============================================================
+[SYNCREAD] positions attempt 1/2: [TxRxResult] There is no status packet!
+[DEBUG] Raw cube_state from tracker: x=-0.2260, y=-0.1764, yaw=-96.6767
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6372, y_norm=0.9044
+==========goal and obs reading from env============
+x, y are:  -0.22602331482160587 -0.17639364469825425
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.13 (reason: tension_too_low, magnitude: 0.277)
+
+[SAFETY INTERVENTION #61]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (0mA) -> forced pull
+  Raw action: [-0.21808949  0.7446592  -0.9734751   0.74745005]
+  Safe action: [ 0.2         0.7446592  -0.9734751   0.74745005]
+  Modification: [0.4180895 0.        0.        0.       ]
+
+============================================================
+RL ACTION #47
+raw action: [ 0.2         0.7446592  -0.9734751   0.74745005]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2316, y=-0.1743, yaw=-96.9146
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6241, y_norm=0.9080
+==========goal and obs reading from env============
+x, y are:  -0.2316486030942504 -0.1742616137825433
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.05 (reason: tension_too_low, magnitude: 0.105)
+
+============================================================
+RL ACTION #48
+raw action: [-0.62257314  0.12744409  0.48876712 -0.37716258]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2311, y=-0.1748, yaw=-96.7718
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6253, y_norm=0.9071
+==========goal and obs reading from env============
+x, y are:  -0.2311391343051744 -0.17482076317528727
+goal is:  -0.119 -0.528
+
+[SAFETY INTERVENTION #62]
+  Reason: opposing_motors
+  Detail: Motors 18 and 19 both pulling
+  Raw action: [-0.9838144   0.38300094  0.8366692   0.6404855 ]
+  Safe action: [-0.9838144   0.38300094  0.4183346   0.6404855 ]
+  Modification: [ 0.         0.        -0.4183346  0.       ]
+
+[SAFETY INTERVENTION #63]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (0mA) -> forced pull
+  Raw action: [-0.9838144   0.38300094  0.8366692   0.6404855 ]
+  Safe action: [0.2        0.38300094 0.4183346  0.6404855 ]
+  Modification: [ 1.1838144  0.        -0.4183346  0.       ]
+
+============================================================
+RL ACTION #49
+raw action: [0.2        0.38300094 0.4183346  0.6404855 ]
+============================================================
+[SYNCREAD] pwm attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] pwm attempt 2/2: [TxRxResult] There is no status packet!
+[SYNCREAD] hw_status attempt 1/2: [TxRxResult] There is no status packet!
+[DEBUG] Raw cube_state from tracker: x=-0.2304, y=-0.1751, yaw=-96.6719
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6271, y_norm=0.9067
+[SYNCREAD] positions attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] currents attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] currents attempt 2/2: [TxRxResult] There is no status packet!
+WARNING: Observation result is None (non-hardware failure)
+[SYNCREAD] positions attempt 1/2: [TxRxResult] There is no status packet!
+Episode  165 | SKIP UPDATE | Steps:  49 | Buffer: 49 | Reason: observation_failed
+Episode  165 | Reward:   -3.964 | Steps:  49 | Dist: 0.371 | Max current: 474.0mA | Safety: 35 | Reason: observation_failed
+Saved render: /home/madhoolika/workspace/reset_policy/src/logs/renderings/render_ep0165.png
+Saved checkpoint: /home/madhoolika/workspace/reset_policy/checkpoints/ppo_checkpoint_165.pth
+[VIDEO] Recording episode 166 -> /home/madhoolika/workspace/reset_policy/src/logs/videos/episode_0166.mp4
+
+================ ENV RESET ================
+[DEBUG] Raw cube_state from tracker: x=-0.2299, y=-0.1757, yaw=-96.6532
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6282, y_norm=0.9056
+Current position: (-0.230, -0.176)
+Board bounds: x=[-0.500, -0.070], y=[-0.710, -0.120]
+Using fixed goal #1: (-0.119, -0.528)
+Goal position: (-0.119, -0.528)
+Waiting for motors to settle before reading positions...
+[DEBUG] Raw cube_state from tracker: x=-0.2299, y=-0.1760, yaw=-96.6503
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6282, y_norm=0.9051
+[SYNCREAD] positions attempt 1/2: [TxRxResult] There is no status packet!
+[DEBUG] Raw cube_state from tracker: x=-0.2300, y=-0.1756, yaw=-96.6648
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6280, y_norm=0.9057
+[SYNCREAD] positions attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] positions attempt 2/2: [TxRxResult] There is no status packet!
+[SYNCREAD] currents attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] temperatures attempt 1/2: [TxRxResult] There is no status packet!
+WARNING: Missing motor state, skipping safety filter
+
+============================================================
+RL ACTION #50
+raw action: [ 0.28388184 -0.1692272  -0.96667653  0.8695491 ]
+============================================================
+[SYNCREAD] positions attempt 1/2: [TxRxResult] There is no status packet!
+[DEBUG] Raw cube_state from tracker: x=-0.2332, y=-0.1742, yaw=-97.0062
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6205, y_norm=0.9081
+==========goal and obs reading from env============
+x, y are:  -0.23317940992856323 -0.17424062836096443
+goal is:  -0.119 -0.528
+
+[SAFETY INTERVENTION #64]
+  Reason: current_aware_scaling
+  Detail: Motor 17: 361mA -> scale=0.68
+  Raw action: [ 0.33836898  0.49577874  0.59305704 -0.52920747]
+  Safe action: [ 0.33836898  0.33613798  0.59305704 -0.52920747]
+  Modification: [ 0.         -0.15964076  0.          0.        ]
+
+[SAFETY INTERVENTION #65]
+  Reason: tension_safety
+  Detail: Motor 17: 361mA -> scale=0.70
+  Raw action: [ 0.33836898  0.49577874  0.59305704 -0.52920747]
+  Safe action: [ 0.33836898  0.23529658  0.59305704 -0.52920747]
+  Modification: [ 0.         -0.26048216  0.          0.        ]
+
+============================================================
+RL ACTION #51
+raw action: [ 0.33836898  0.23529658  0.59305704 -0.52920747]
+============================================================
+[SYNCREAD] positions attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] currents attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] hw_status attempt 1/2: [TxRxResult] There is no status packet!
+[DEBUG] Raw cube_state from tracker: x=-0.2317, y=-0.1761, yaw=-96.8278
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6239, y_norm=0.9050
+[SYNCREAD] positions attempt 1/2: [TxRxResult] There is no status packet!
+==========goal and obs reading from env============
+x, y are:  -0.23174314456696782 -0.1760598170955464
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.03 (reason: tension_safety, magnitude: 0.065)
+[SYNCREAD] temperatures attempt 1/2: [TxRxResult] There is no status packet!
+
+[SAFETY INTERVENTION #66]
+  Reason: voltage_critical
+  Detail: Motor 18: 3.2V -> scale=0.15
+  Raw action: [ 0.11983407 -0.07028396 -0.570724    0.8590059 ]
+  Safe action: [ 0.11983407 -0.01686815 -0.0856086   0.8590059 ]
+  Modification: [0.         0.05341581 0.4851154  0.        ]
+
+[SAFETY INTERVENTION #67]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (0mA) -> forced pull
+  Raw action: [ 0.11983407 -0.07028396 -0.570724    0.8590059 ]
+  Safe action: [ 0.2        -0.01686815 -0.0856086   0.8590059 ]
+  Modification: [0.08016593 0.05341581 0.4851154  0.        ]
+
+============================================================
+RL ACTION #52
+raw action: [ 0.2        -0.01686815 -0.0856086   0.8590059 ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2314, y=-0.1761, yaw=-96.7671
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6246, y_norm=0.9049
+==========goal and obs reading from env============
+x, y are:  -0.23141517953495538 -0.17611185269849355
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.07 (reason: tension_too_low, magnitude: 0.155)
+
+[SAFETY INTERVENTION #68]
+  Reason: motor_stuck
+  Detail: Motor 19 stuck: current=543mA, no movement
+  Raw action: [-0.20608784 -0.72527206 -0.8883749  -0.9729133 ]
+  Safe action: [-0.20608784 -0.72527206 -0.8883749  -0.5       ]
+  Modification: [0.         0.         0.         0.47291332]
+
+[SAFETY INTERVENTION #69]
+  Reason: voltage_low
+  Detail: Motor 17: 3.9V -> scale=0.24
+  Raw action: [-0.20608784 -0.72527206 -0.8883749  -0.9729133 ]
+  Safe action: [-0.20608784 -0.17406535 -0.8883749  -0.5       ]
+  Modification: [0.         0.5512067  0.         0.47291332]
+
+============================================================
+RL ACTION #53
+raw action: [-0.20608784 -0.17406535 -0.8883749  -0.5       ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2351, y=-0.1733, yaw=-97.0203
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6160, y_norm=0.9096
+==========goal and obs reading from env============
+x, y are:  -0.23510562407922758 -0.17333197726602484
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.10 (reason: voltage_low, magnitude: 0.256)
+
+[SAFETY INTERVENTION #70]
+  Reason: current_aware_scaling
+  Detail: Motor 19: 320mA -> scale=0.76
+  Raw action: [-0.24731745  0.71003914  0.27530783  0.8689873 ]
+  Safe action: [-0.24731745  0.47146598  0.27530783  0.6604304 ]
+  Modification: [ 0.         -0.23857316  0.         -0.20855695]
+
+[SAFETY INTERVENTION #71]
+  Reason: tension_safety
+  Detail: Motor 19: 320mA -> scale=0.70
+  Raw action: [-0.24731745  0.71003914  0.27530783  0.8689873 ]
+  Safe action: [-0.24731745  0.33002618  0.27530783  0.46230125]
+  Modification: [ 0.         -0.38001296  0.         -0.40668607]
+
+[SAFETY INTERVENTION #72]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (0mA) -> forced pull
+  Raw action: [-0.24731745  0.71003914  0.27530783  0.8689873 ]
+  Safe action: [0.2        0.33002618 0.27530783 0.46230125]
+  Modification: [ 0.44731745 -0.38001296  0.         -0.40668607]
+
+============================================================
+RL ACTION #54
+raw action: [0.2        0.33002618 0.27530783 0.46230125]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2349, y=-0.1741, yaw=-97.0505
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6166, y_norm=0.9083
+==========goal and obs reading from env============
+x, y are:  -0.23487741911546817 -0.17411572145278847
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.15 (reason: tension_too_low, magnitude: 0.309)
+
+[SAFETY INTERVENTION #73]
+  Reason: motor_stuck
+  Detail: Motor 19 stuck: current=452mA, no movement
+  Raw action: [-0.691349  -0.9728201 -0.630835   0.8805252]
+  Safe action: [-0.691349 -0.5      -0.630835 -0.5     ]
+  Modification: [ 0.         0.4728201  0.        -1.3805251]
+
+[SAFETY INTERVENTION #74]
+  Reason: voltage_low
+  Detail: Motor 18: 3.5V -> scale=0.10
+  Raw action: [-0.691349  -0.9728201 -0.630835   0.8805252]
+  Safe action: [-0.691349  -0.5       -0.0630835 -0.5      ]
+  Modification: [ 0.         0.4728201  0.5677515 -1.3805251]
+
+============================================================
+RL ACTION #55
+raw action: [-0.691349  -0.5       -0.0630835 -0.5      ]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2350, y=-0.1738, yaw=-97.1300
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6162, y_norm=0.9088
+==========goal and obs reading from env============
+x, y are:  -0.23503808784817493 -0.17381673793220265
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.24 (reason: voltage_low, magnitude: 0.605)
+
+[SAFETY INTERVENTION #75]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (0mA) -> forced pull
+  Raw action: [-0.313242   -0.04309177  0.5480739   0.04119909]
+  Safe action: [ 0.2        -0.04309177  0.5480739   0.04119909]
+  Modification: [0.513242 0.       0.       0.      ]
+
+============================================================
+RL ACTION #56
+raw action: [ 0.2        -0.04309177  0.5480739   0.04119909]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2332, y=-0.1755, yaw=-96.9338
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6204, y_norm=0.9060
+==========goal and obs reading from env============
+x, y are:  -0.23321898568511085 -0.17546399639489368
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.06 (reason: tension_too_low, magnitude: 0.128)
+
+[SAFETY INTERVENTION #76]
+  Reason: current_aware_scaling
+  Detail: Motor 19: 317mA -> scale=0.77
+  Raw action: [-0.00951419 -0.6990184  -0.7980932   0.34657013]
+  Safe action: [-0.00951419 -0.6990184  -0.7980932   0.2654727 ]
+  Modification: [ 0.          0.          0.         -0.08109742]
+
+[SAFETY INTERVENTION #77]
+  Reason: voltage_low
+  Detail: Motor 18: 3.9V -> scale=0.24
+  Raw action: [-0.00951419 -0.6990184  -0.7980932   0.34657013]
+  Safe action: [-0.00951419 -0.6990184  -0.19154242  0.2654727 ]
+  Modification: [ 0.          0.          0.6065508  -0.08109742]
+
+[SAFETY INTERVENTION #78]
+  Reason: tension_safety
+  Detail: Motor 19: 317mA -> scale=0.70
+  Raw action: [-0.00951419 -0.6990184  -0.7980932   0.34657013]
+  Safe action: [-0.00951419 -0.6990184  -0.19154242  0.18583089]
+  Modification: [ 0.          0.          0.6065508  -0.16073924]
+
+============================================================
+RL ACTION #57
+raw action: [-0.00951419 -0.6990184  -0.19154242  0.18583089]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2333, y=-0.1758, yaw=-96.8389
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6203, y_norm=0.9054
+==========goal and obs reading from env============
+x, y are:  -0.23329233171863678 -0.17579568472538043
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.09 (reason: tension_safety, magnitude: 0.192)
+
+============================================================
+RL ACTION #58
+raw action: [ 0.5503482   0.79546165  0.0350962  -0.25191352]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2333, y=-0.1757, yaw=-96.8408
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6203, y_norm=0.9056
+==========goal and obs reading from env============
+x, y are:  -0.2332762990417479 -0.17571819044256598
+goal is:  -0.119 -0.528
+
+[SAFETY INTERVENTION #79]
+  Reason: current_aware_scaling
+  Detail: Motor 17: 312mA -> scale=0.78
+  Raw action: [ 0.46755174  0.6339894  -0.7144928  -0.44485584]
+  Safe action: [ 0.46755174  0.49197578 -0.7144928  -0.44485584]
+  Modification: [ 0.         -0.14201361  0.          0.        ]
+
+[SAFETY INTERVENTION #80]
+  Reason: tension_safety
+  Detail: Motor 17: 312mA -> scale=0.70
+  Raw action: [ 0.46755174  0.6339894  -0.7144928  -0.44485584]
+  Safe action: [ 0.46755174  0.34438303 -0.7144928  -0.44485584]
+  Modification: [ 0.         -0.28960636  0.          0.        ]
+
+============================================================
+RL ACTION #59
+raw action: [ 0.46755174  0.34438303 -0.7144928  -0.44485584]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2351, y=-0.1741, yaw=-97.1231
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6161, y_norm=0.9082
+==========goal and obs reading from env============
+x, y are:  -0.2350954940582412 -0.17414778526202218
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.03 (reason: tension_safety, magnitude: 0.072)
+
+[SAFETY INTERVENTION #81]
+  Reason: motor_stuck
+  Detail: Motor 17 stuck: current=441mA, no movement
+  Raw action: [-0.9269325  -0.43207303 -0.7822211   0.11373577]
+  Safe action: [-0.9269325  -0.5        -0.7822211   0.11373577]
+  Modification: [ 0.         -0.06792697  0.          0.        ]
+
+[SAFETY INTERVENTION #82]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (0mA) -> forced pull
+  Raw action: [-0.9269325  -0.43207303 -0.7822211   0.11373577]
+  Safe action: [ 0.2        -0.5        -0.7822211   0.11373577]
+  Modification: [ 1.1269325  -0.06792697  0.          0.        ]
+
+============================================================
+RL ACTION #60
+raw action: [ 0.2        -0.5        -0.7822211   0.11373577]
+============================================================
+[DEBUG] Raw cube_state from tracker: x=-0.2382, y=-0.1724, yaw=-97.0590
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6089, y_norm=0.9112
+==========goal and obs reading from env============
+x, y are:  -0.23817839824065257 -0.17241831005706354
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.14 (reason: tension_too_low, magnitude: 0.299)
+
+============================================================
+RL ACTION #61
+raw action: [ 0.49866527  0.85218006  0.9629244  -0.44728327]
+============================================================
+[SYNCREAD] positions attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] temperatures attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] velocity attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] velocity attempt 2/2: [TxRxResult] There is no status packet!
+[SYNCREAD] torque attempt 1/2: [TxRxResult] There is no status packet!
+[DEBUG] Raw cube_state from tracker: x=-0.2359, y=-0.1738, yaw=-96.8664
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6142, y_norm=0.9088
+[SYNCREAD] currents attempt 1/2: [TxRxResult] There is no status packet!
+==========goal and obs reading from env============
+x, y are:  -0.23588505540860605 -0.17378276093727807
+goal is:  -0.119 -0.528
+[SYNCREAD] voltages attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] currents attempt 1/2: [TxRxResult] There is no status packet!
+
+[SAFETY INTERVENTION #83]
+  Reason: motor_stuck
+  Detail: Motor 17 stuck: current=402mA, no movement
+  Raw action: [-0.02720751  0.67646945 -0.84191334 -0.69362915]
+  Safe action: [-0.02720751 -0.5        -0.84191334 -0.69362915]
+  Modification: [ 0.        -1.1764694  0.         0.       ]
+
+[SAFETY INTERVENTION #84]
+  Reason: voltage_low
+  Detail: Motor 18: 3.7V -> scale=0.12
+  Raw action: [-0.02720751  0.67646945 -0.84191334 -0.69362915]
+  Safe action: [-0.02720751 -0.06000002 -0.10102963 -0.69362915]
+  Modification: [ 0.         -0.73646945  0.7408837   0.        ]
+
+[SAFETY INTERVENTION #85]
+  Reason: tension_too_low
+  Detail: Motor 16: slack (7mA) -> forced pull
+  Raw action: [-0.02720751  0.67646945 -0.84191334 -0.69362915]
+  Safe action: [ 0.2        -0.06000002 -0.10102963 -0.69362915]
+  Modification: [ 0.22720751 -0.73646945  0.7408837   0.        ]
+
+============================================================
+RL ACTION #62
+raw action: [ 0.2        -0.06000002 -0.10102963 -0.69362915]
+============================================================
+[SYNCREAD] positions attempt 1/2: [TxRxResult] There is no status packet!
+[DEBUG] Raw cube_state from tracker: x=-0.2330, y=-0.1764, yaw=-95.8377
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6208, y_norm=0.9044
+==========goal and obs reading from env============
+x, y are:  -0.23304907187213209 -0.1763851464288137
+goal is:  -0.119 -0.528
+  [SAFETY PENALTY] -0.20 (reason: tension_too_low, magnitude: 0.426)
+
+[SAFETY INTERVENTION #86]
+  Reason: motor_stuck
+  Detail: Motor 17 stuck: current=401mA, no movement
+  Raw action: [ 0.09454653 -0.14021978  0.9728131   0.9270009 ]
+  Safe action: [ 0.09454653 -0.5         0.9728131   0.9270009 ]
+  Modification: [ 0.         -0.35978022  0.          0.        ]
+
+============================================================
+RL ACTION #63
+raw action: [ 0.09454653 -0.5         0.9728131   0.9270009 ]
+============================================================
+[SYNCREAD] positions attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] positions attempt 2/2: [TxRxResult] There is no status packet!
+[SYNCREAD] currents attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] currents attempt 2/2: [TxRxResult] There is no status packet!
+[SYNCREAD] voltages attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] voltages attempt 2/2: [TxRxResult] There is no status packet!
+[SYNCREAD] temperatures attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] temperatures attempt 2/2: [TxRxResult] There is no status packet!
+[SYNCREAD] pwm attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] pwm attempt 2/2: [TxRxResult] There is no status packet!
+[SYNCREAD] velocity attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] velocity attempt 2/2: [TxRxResult] There is no status packet!
+[SYNCREAD] torque attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] torque attempt 2/2: [TxRxResult] There is no status packet!
+[SYNCREAD] hw_status attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] hw_status attempt 2/2: [TxRxResult] There is no status packet!
+[DEBUG] Raw cube_state from tracker: x=-0.2327, y=-0.1750, yaw=-96.4487
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6216, y_norm=0.9068
+[SYNCREAD] positions attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] positions attempt 2/2: [TxRxResult] There is no status packet!
+WARNING: Observation result is None (non-hardware failure)
+[SYNCREAD] positions attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] positions attempt 2/2: [TxRxResult] There is no status packet!
+Episode  166 | UPDATE | Steps:  14 | Buffer: 63 | Actor: -0.0186 | Critic: 0.8404 | Entropy: 5.7173
+Episode  166 | Reward:   -1.016 | Steps:  14 | Dist: 0.370 | Max current: 544.0mA | Safety: 11 | Reason: observation_failed
+Saved render: /home/madhoolika/workspace/reset_policy/src/logs/renderings/render_ep0166.png
+Saved checkpoint: /home/madhoolika/workspace/reset_policy/checkpoints/ppo_checkpoint_166.pth
+[VIDEO] Recording episode 167 -> /home/madhoolika/workspace/reset_policy/src/logs/videos/episode_0167.mp4
+
+================ ENV RESET ================
+[DEBUG] Raw cube_state from tracker: x=-0.2329, y=-0.1744, yaw=-96.3213
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6212, y_norm=0.9079
+[SYNCREAD] positions attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] positions attempt 2/2: [TxRxResult] There is no status packet!
+[RESET] Observation attempt 1/5 failed: Failed to read motor positions. Retrying in 1s...
+[DEBUG] Raw cube_state from tracker: x=-0.2325, y=-0.1749, yaw=-96.3851
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6220, y_norm=0.9069
+[SYNCREAD] positions attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] positions attempt 2/2: [TxRxResult] There is no status packet!
+[RESET] Observation attempt 2/5 failed: Failed to read motor positions. Retrying in 1s...
+[DEBUG] Raw cube_state from tracker: x=-0.2326, y=-0.1749, yaw=-96.4409
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6219, y_norm=0.9069
+[SYNCREAD] positions attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] positions attempt 2/2: [TxRxResult] There is no status packet!
+[RESET] Observation attempt 3/5 failed: Failed to read motor positions. Retrying in 1s...
+[DEBUG] Raw cube_state from tracker: x=-0.2326, y=-0.1750, yaw=-96.3321
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6218, y_norm=0.9068
+[SYNCREAD] positions attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] positions attempt 2/2: [TxRxResult] There is no status packet!
+[RESET] Observation attempt 4/5 failed: Failed to read motor positions. Retrying in 1s...
+[DEBUG] Raw cube_state from tracker: x=-0.2327, y=-0.1749, yaw=-96.4217
+[DEBUG] x_min=-0.5, x_max=-0.07, y_min=-0.71, y_max=-0.12
+[DEBUG] Normalized: x_norm=0.6216, y_norm=0.9069
+[SYNCREAD] positions attempt 1/2: [TxRxResult] There is no status packet!
+[SYNCREAD] positions attempt 2/2: [TxRxResult] There is no status packet!
+[RESET] Observation attempt 5/5 failed: Failed to read motor positions. Retrying in 1s...
+
+Training stopped with error: RuntimeError: Cannot get cube position during reset:Failed to read motor positions
+
+=== CLEANUP START ===
+
+========== EXECUTOR SHUTDOWN ==========
+Waiting for in-progress commands to complete...
+Disabling all motors via sync write...
+  Motor 16: torque disabled
+  Motor 17: torque disabled
+  Motor 18: torque disabled
+  Motor 19: torque disabled
+Port closed
+========== SHUTDOWN COMPLETE ==========
+
+Environment closed
+Environment closed
+Cameras closed
+=== CLEANUP COMPLETE ===
+Traceback (most recent call last):
+  File "/home/madhoolika/workspace/reset_policy/src/scripts/main.py", line 290, in <module>
+    main()
+    ~~~~^^
+  File "/home/madhoolika/workspace/reset_policy/src/scripts/main.py", line 248, in main
+    actor_critic = train(env, config)
+  File "/home/madhoolika/workspace/reset_policy/src/scripts/train.py", line 97, in train
+    state, _ = env.reset(options={'episode_num': episode + 1})
+               ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/madhoolika/workspace/reset_policy/src/reset_policy/environment/environment.py", line 175, in reset
+    raise RuntimeError(f"Cannot get cube position during reset:{result.error_message}")
+RuntimeError: Cannot get cube position during reset:Failed to read motor positions
