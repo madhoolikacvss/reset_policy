@@ -38,7 +38,7 @@ class TrainingLogger:
         self.training_metrics_file = self.log_dir / "training_metrics.csv"
 
         # Motor log management
-        self.max_motor_logs = 200
+        self.max_motor_logs = 1000
         self.current_motor_file = None
         self.current_motor_writer = None
 

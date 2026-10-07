@@ -120,7 +120,7 @@ class EnvironmentConfig:
     max_steps: int = 400
     
     # Goal settings
-    goal_success_threshold: float = 0.005 #cm - success when within this distance
+    goal_success_threshold: float = 0.03 #cm - success when within this distance
     goal_margin: float = 0.1  # 10 cm - keep goals away from edges
     use_fixed_goals: bool = True  # If True, cycle through fixed_goals
     fixed_goals: List = None 
@@ -148,10 +148,10 @@ class EnvironmentConfig:
             # Default fixed goals
             self.fixed_goals = [
                 (-0.119, -0.528),
-                # (-0.296, -0.366),
-                # (-0.225, -0.427),
-                # (-0.365, -0.488),
-                # (-0.142, -0.347),
+                (-0.296, -0.366),
+                (-0.225, -0.427),
+                (-0.365, -0.488),
+                (-0.142, -0.347),
             ]
 
 @dataclass

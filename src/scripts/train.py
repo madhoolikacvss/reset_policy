@@ -310,22 +310,23 @@ def train(env, config=config):
             print(f"Saved checkpoint: {checkpoint_path}")
 
         if goal_reached_this_episode:
-            final_path = config.checkpoint_dir / "ppo_goal_reached.pth"
-            torch.save({
-                "episode": episode,
-                "model_state_dict": actor_critic.state_dict(),
-                "optimizer_state_dict": ppo.optimizer.state_dict(),
-                "steps_since_update": steps_since_update,
-                "termination_reason": "goal_reached",
-            }, final_path)
-            print(f"Saved goal-reached checkpoint: {final_path}")
+            print("GOAL REACHED!!!!!!!!!!!!!!!!!!!")
+            # final_path = config.checkpoint_dir / "ppo_goal_reached.pth"
+            # torch.save({
+            #     "episode": episode,
+            #     "model_state_dict": actor_critic.state_dict(),
+            #     "optimizer_state_dict": ppo.optimizer.state_dict(),
+            #     "steps_since_update": steps_since_update,
+            #     "termination_reason": "goal_reached",
+            # }, final_path)
+            # print(f"Saved goal-reached checkpoint: {final_path}")
 
-            # Close logger
-            if video_recorder is not None:
-                video_recorder.close()
-            logger.close()
+            # # Close logger
+            # if video_recorder is not None:
+            #     video_recorder.close()
+            # logger.close()
 
-            return actor_critic
+            # return actor_critic
 
     # Close video recorder
     if video_recorder is not None:

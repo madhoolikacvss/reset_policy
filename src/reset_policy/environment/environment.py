@@ -152,37 +152,38 @@ class ResetPolicyEnv(gym.Env):
                 f"Cannot continue training. Details: {self.hardware_error_details}"
             )
         
-        # Reposition if needed
-        if self.needs_reposition:
+        # Read current cube position (always)
+        result = None
+        for obs_attempt in range(5):
+            result = self.obs_builder.get_observation_result()
+            if result.observation is not None:
+                break
+            print(f"[RESET] Observation attempt {obs_attempt+1}/5 failed: "
+                f"{result.error_message}. Retrying in 1s...")
+            time.sleep(1.0)
+        
+        if result.observation is None:
+            raise RuntimeError(f"Cannot get cube position during reset: {result.error_message}")
+        
+        x, y = result.observation.cube_x, result.observation.cube_y
+        print(f"Current position: ({x:.3f}, {y:.3f})")
+        print(f"Board bounds: x=[{self.grid.x_min:.3f}, {self.grid.x_max:.3f}], "
+            f"y=[{self.grid.y_min:.3f}, {self.grid.y_max:.3f}]")
+        
+        # Reposition if cube is out of bounds (or flagged from last episode)
+        currently_out = (
+            x < self.grid.x_min or x > self.grid.x_max or
+            y < self.grid.y_min or y > self.grid.y_max
+        )
+        
+        if self.needs_reposition or currently_out:
             print("Repositioning cube to center...")
-            self.reposition_cube_to_center()
+            success = self.reposition_cube_to_center()
             self.needs_reposition = False
             self._sync_targets_with_actual_positions()
-
-        else:
-            # Get current position
-            result = None
-            for obs_attempt in range(5):
-                result = self.obs_builder.get_observation_result()
-                if result.observation is not None:
-                    break
-                print(f"[RESET] Observation attempt {obs_attempt+1}/5 failed: "
-                    f"{result.error_message}. Retrying in 1s...")
-                time.sleep(1.0)
-
-
-            if result.observation is None:
-                raise RuntimeError(f"Cannot get cube position during reset:{result.error_message}")
-            
-            x, y = result.observation.cube_x, result.observation.cube_y
-            print(f"Current position: ({x:.3f}, {y:.3f})")
-            print(f"Board bounds: x=[{self.grid.x_min:.3f}, {self.grid.x_max:.3f}], "
-                    f"y=[{self.grid.y_min:.3f}, {self.grid.y_max:.3f}]")
-            # print(f"Env tracker says:  x={x:.4f}, y={y:.4f}")
-            # print(f"Tracker object:    {self.obs_builder.cube_tracker}")
-            # print(f"Tracker config:    {vars(self.obs_builder.cube_tracker)}") 
-            # print(f"cube tracker's get_state() method output: x, y, z, yaw: {self.obs_builder.cube_tracker.get_state()}")
-
+            if not success:
+                print("WARNING: Repositioning failed - cube may still be out of bounds")
+        
         # Sample new goal
         x_goal, y_goal = self.sample_goal()
         self.goal_position = (x_goal, y_goal)
@@ -195,27 +196,27 @@ class ResetPolicyEnv(gym.Env):
         self.grid.reset()
         self.step_count = 0
         
-        # Establish initial positions
+        # Establish initial motor positions (post-reposition reference)
         self.obs_builder.reset()
         
-        # Get first observation
-        result = self.obs_builder.get_observation_result()
-        
-        if result.hardware_error:
-            self.hardware_error_occurred = True
-            self.hardware_error_details = {
-                'error_ids': result.hardware_error_ids,
-                'error_status': result.hardware_error_status,
-                'message': result.error_message,
-            }
-            raise RuntimeError(
-                f"Hardware error detected during reset: {result.error_message}. "
-                f"Motor IDs: {result.hardware_error_ids}"
-            )
-
+        # Get first observation of the episode
         result = None
         for obs_attempt in range(5):
             result = self.obs_builder.get_observation_result()
+            
+            # Check for hardware error first
+            if result.hardware_error:
+                self.hardware_error_occurred = True
+                self.hardware_error_details = {
+                    'error_ids': result.hardware_error_ids,
+                    'error_status': result.hardware_error_status,
+                    'message': result.error_message,
+                }
+                raise RuntimeError(
+                    f"Hardware error detected during reset: {result.error_message}. "
+                    f"Motor IDs: {result.hardware_error_ids}"
+                )
+            
             if result.observation is not None:
                 break
             print(f"[RESET] Observation attempt {obs_attempt+1}/5 failed: "
@@ -587,94 +588,125 @@ class ResetPolicyEnv(gym.Env):
     
     
     # Repositioning
-    
-    
-    def reposition_cube_to_center(self, max_attempts=3):
-        """Reposition cube to center using deterministic motor pulls."""
+    def reposition_cube_to_center(self, max_attempts=30, min_movement=0.003, max_stuck_retries=5):
+        """
+        Reposition cube by iteratively pulling motors on all violated axes.
+        
+        Retries up to `max_stuck_retries` times when no movement is detected,
+        to account for slack strings that need to be taken up before the cube moves.
+        
+        Args:
+            max_attempts: hard cap on total iterations (safety net)
+            min_movement: minimum cube displacement (m) to count as "moved"
+            max_stuck_retries: consecutive no-movement retries before giving up
+        """
         print("\n========== REPOSITIONING CUBE ==========")
         
+        stuck_retries = 0
+        
         for attempt in range(max_attempts):
-            # Get current position
             result = self.obs_builder.get_observation_result()
             if result.observation is None:
                 print("ERROR: Cannot get cube position")
                 return False
             
-            x, y = result.observation.cube_x, result.observation.cube_y
-            print(f"Current position: ({x:.3f}, {y:.3f})")
-            print(f"Board bounds: x=[{self.grid.x_min:.3f}, {self.grid.x_max:.3f}], "
-                  f"y=[{self.grid.y_min:.3f}, {self.grid.y_max:.3f}]")
+            x_before, y_before = result.observation.cube_x, result.observation.cube_y
+            print(f"[Attempt {attempt+1}] Position before: ({x_before:.3f}, {y_before:.3f})")
+            # trajectory = []
+            # trajectory.append((attempt+1, x_before, y_before, movement))
             
-            # Check if already in bounds
-            in_bounds = (self.grid.x_min <= x <= self.grid.x_max and 
-                        self.grid.y_min <= y <= self.grid.y_max)
+            # Determine which axes are violated
+            x_out = x_before < self.grid.x_min or x_before > self.grid.x_max
+            y_out = y_before < self.grid.y_min or y_before > self.grid.y_max
             
-            if in_bounds and attempt > 0:
+            # Exit condition: in bounds on both axes
+            if not x_out and not y_out:
                 print("Cube is in bounds, repositioning complete")
-                break
+                self._sync_targets_with_actual_positions()
+                return True
+
             
-            # Determine motor to pull
-            motor_to_pull = self._determine_motor_to_pull(x, y)
-            if motor_to_pull is None:
-                print("Cube is centered, no repositioning needed")
-                break
+            # Determine motors to pull for each violated axis
+            motors_to_pull = self._determine_motors_to_pull(x_before, y_before, x_out, y_out)
+            print(f"  Out of bounds: {'X ' if x_out else ''}{'Y' if y_out else ''}".strip())
+            print(f"  Pulling motors: {motors_to_pull}")
             
-            # Execute repositioning
-            self._pull_motor_to_reposition(motor_to_pull)
-            
-            # Restore tension
+            # Execute the pull(s)
+            self._pull_motors_to_reposition(motors_to_pull)
             self.restore_tension_after_reposition()
-            
-            # Sync targets
             self._sync_targets_with_actual_positions()
-        
-        print("========== REPOSITION COMPLETE ==========")
-        return True
-    
-    def _determine_motor_to_pull(self, x, y):
-        """Determine which motor to pull based on position."""
-        center_x = (self.grid.x_min + self.grid.x_max) / 2
-        center_y = (self.grid.y_min + self.grid.y_max) / 2
-        dx = center_x - x
-        dy = center_y - y
-        
-        # Priority: whichever is further from center
-        if abs(dx) > abs(dy):
-            if dx > 0:
-                print(f"Pulling Motor 18 to move +X (up)")
-                return 18
+            
+            # Measure movement
+            result = self.obs_builder.get_observation_result()
+            if result.observation is None:
+                print("ERROR: Cannot get cube position after pull")
+                return False
+            
+            x_after, y_after = result.observation.cube_x, result.observation.cube_y
+            print("Repositioning trajectory:")
+            movement = np.sqrt((x_after - x_before)**2 + (y_after - y_before)**2)
+            print(f"[Attempt {attempt+1}] Position after:  ({x_after:.3f}, {y_after:.3f})")
+            print(f"[Attempt {attempt+1}] Movement: {movement*1000:.1f} mm")
+            
+            # Stuck detection with retry tolerance
+            if movement < min_movement:
+                stuck_retries += 1
+                print(f"  No movement detected (retry {stuck_retries}/{max_stuck_retries})")
+                if stuck_retries >= max_stuck_retries:
+                    print(f"  Cube stuck after {max_stuck_retries} retries - aborting repositioning")
+                    self._sync_targets_with_actual_positions()
+                    return False
             else:
-                print(f"Pulling Motor 19 to move -X (down)")
-                return 19
-        else:
-            if dy > 0:
-                print(f"Pulling Motor 17 to move +Y (right)")
-                return 17
-            else:
-                print(f"Pulling Motor 16 to move -Y (left)")
-                return 16
+                # Movement detected - reset the stuck counter
+                stuck_retries = 0
+        
+        print("========== REPOSITIONING GAVE UP (max attempts) ==========")
+        self._sync_targets_with_actual_positions()
+        return False
     
-    def _pull_motor_to_reposition(self, motor_to_pull, steps=20, step_delta=50):
-        """Execute repositioning pull."""
-        # Release other motors
-        print(f"Releasing other motors (except Motor {motor_to_pull})...")
+    def _determine_motors_to_pull(self, x, y, x_out, y_out):
+        """Return list of motors to pull to correct all violated axes."""
+        motors = []
+        
+        if x_out:
+            if x < self.grid.x_min:
+                motors.append(18)  # +X (up)
+                print(f"  X violation ({x:.3f} < {self.grid.x_min:.3f}): Motor 18 (+X)")
+            else:
+                motors.append(19)  # -X (down)
+                print(f"  X violation ({x:.3f} > {self.grid.x_max:.3f}): Motor 19 (-X)")
+        
+        if y_out:
+            if y < self.grid.y_min:
+                motors.append(17)  # +Y (right)
+                print(f"  Y violation ({y:.3f} < {self.grid.y_min:.3f}): Motor 17 (+Y)")
+            else:
+                motors.append(16)  # -Y (left)
+                print(f"  Y violation ({y:.3f} > {self.grid.y_max:.3f}): Motor 16 (-Y)")
+        
+        return motors
+    
+    def _pull_motors_to_reposition(self, motors_to_pull, steps=20, step_delta=50):
+        """Execute repositioning pulls for one or more motors."""
+        if not motors_to_pull:
+            return
+        
+        print(f"Releasing other motors (except {motors_to_pull})...")
         for motor in self.executor.motor_ids:
-            if motor != motor_to_pull:
+            if motor not in motors_to_pull:
                 try:
                     self.executor.write1(motor, 64, 0)  # TORQUE_DISABLE
-                    print(f"  Released Motor {motor}")
                 except Exception as e:
                     print(f"  Failed to release motor {motor}: {e}")
         
         time.sleep(0.05)
         
-        # Pull motor in steps
-        print(f"Moving Motor {motor_to_pull}: {steps} steps of {step_delta} ticks")
+        print(f"Moving motors {motors_to_pull}: {steps} steps of {step_delta} ticks")
         for step in range(steps):
-            self.executor.move_motor_by_delta(motor_to_pull, step_delta)
+            for motor in motors_to_pull:
+                self.executor.move_motor_by_delta(motor, step_delta)
             time.sleep(0.05)
         
-        # Re-enable motors
         print("Re-enabling all motors...")
         for motor in self.executor.motor_ids:
             try:

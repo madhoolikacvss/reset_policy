@@ -1,6 +1,15 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+import os
+
+def _save(fig, out_dir, name):
+    if out_dir is None:
+        return
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, name)
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    print(f"Saved: {path}")
 
 def plot_training_metrics(csv_file_path):
     """
@@ -44,6 +53,7 @@ def plot_training_metrics(csv_file_path):
     ax3.grid(True, alpha=0.3)
     
     plt.tight_layout()
+    _save(fig, out_dir, "training_metrics.png")
     plt.show()
     
     return df
@@ -91,6 +101,7 @@ def plot_with_rolling_average(csv_file_path, window=10):
     ax3.legend()
     
     plt.tight_layout()
+    _save(fig, out_dir, "training_metrics.png")
     plt.show()
     
     return df
@@ -120,6 +131,7 @@ def plot_combined(csv_file_path):
     ax.legend()
     
     plt.tight_layout()
+    _save(fig, out_dir, "training_metrics.png")
     plt.show()
     
     return df
@@ -165,6 +177,7 @@ def plot_all_in_one(csv_file_path):
     ax4.legend()
     
     plt.tight_layout()
+    _save(fig, out_dir, "training_metrics.png")
     plt.show()
     
     return df
@@ -173,6 +186,7 @@ def plot_all_in_one(csv_file_path):
 if __name__ == "__main__":
     # Replace with your actual CSV file path
     csv_file = "training_metrics.csv"
+    out_dir = "/home/madhoolika/workspace/reset_policy/src/logs"
     
     try:
         # Option 1: Basic separate plots

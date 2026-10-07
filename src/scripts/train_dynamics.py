@@ -1,27 +1,19 @@
 """
-PETS-style 1-step forward dynamics model for the cube-string system.
+PETS-style dynamics model for the string-driven cube board.
 
-Inputs (14 dims):
-    [cube_x, cube_y,
-     action_m16, action_m17, action_m18, action_m19,
-     obs_motor_16_pos_delta_norm ... obs_motor_19_pos_delta_norm,
-     obs_motor_16_current_norm  ... obs_motor_19_current_norm]
-
-Outputs (2 dims):
-    [delta_cube_x, delta_cube_y]
-
-Model:   ensemble of 5 MLPs (3 layers, 200 units, Swish)
-Loss:    MSE on delta
-
-Validation:
-    - Split by episode (not by step) to avoid leakage
-    - Report RMSE in physical units + goal-directedness check
+Changes vs. previous version
+  1. full_eval() now normalizes X, and de-normalizes predictions back to physical units.
+  2. Goal-directedness uses the goal-relative features (dist_to_goal_x/y), not the origin.
+  3. Episode-level K-fold cross validation. Each fold has:
+        train episodes  -> fit weights
+        inner-val eps   -> pick best epoch (early stopping)
+        held-out fold   -> reported metrics (never used for any decision)
+  4. Simple baselines per fold (predict-mean, predict-zero, prev_delta, ridge).
+  5. Optional final model trained on all episodes after CV.
 
 Usage:
-    python scripts/train_dynamics_model.py
-    python scripts/train_dynamics_model.py --epochs 100 --ensemble 5
+    python train_dynamics_kfold.py --log-dir /path/to/motor_logs --out-dir ./dyn_out --k-folds 5
 """
-
 import argparse
 import time
 from pathlib import Path
@@ -30,115 +22,136 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import DataLoader, TensorDataset
 
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 # ---------------- Config ----------------
 
-MOTOR_LOG_DIR = Path(
-    "/home/madhoolika/workspace/reset_policy/src/logs/motor_logs"
-)
-OUT_DIR = Path(
-    "/home/madhoolika/workspace/reset_policy/src/logs/dynamics_model"
-)
-
-INPUT_COLS = [
+BASE_INPUT_COLS = [
     "cube_x", "cube_y",
+    "dist_to_goal_x", "dist_to_goal_y", "dist_to_goal",
+    "obs_goal_x_norm", "obs_goal_y_norm",
+    "obs_motor_16_pos_delta_norm", "obs_motor_17_pos_delta_norm",
+    "obs_motor_18_pos_delta_norm", "obs_motor_19_pos_delta_norm",
+    "obs_motor_16_current_norm", "obs_motor_17_current_norm",
+    "obs_motor_18_current_norm", "obs_motor_19_current_norm",
+    "obs_horizontal_tension_norm", "obs_vertical_tension_norm", "obs_total_tension_norm",
+    "obs_motor_16_target_error_norm", "obs_motor_17_target_error_norm",
+    "obs_motor_18_target_error_norm", "obs_motor_19_target_error_norm",
     "action_m16", "action_m17", "action_m18", "action_m19",
-    "obs_motor_16_pos_delta_norm",
-    "obs_motor_17_pos_delta_norm",
-    "obs_motor_18_pos_delta_norm",
-    "obs_motor_19_pos_delta_norm",
-    "obs_motor_16_current_norm",
-    "obs_motor_17_current_norm",
-    "obs_motor_18_current_norm",
-    "obs_motor_19_current_norm",
 ]
+LAG_INPUT_COLS = ["prev_delta_cube_x", "prev_delta_cube_y"]
+INPUT_COLS = BASE_INPUT_COLS + LAG_INPUT_COLS   # 27 dims (25 base + 2 lag)
 OUTPUT_COLS = ["cube_x", "cube_y"]
 
-VAL_FRACTION = 0.10
+IDX_DIST_X = INPUT_COLS.index("dist_to_goal_x")
+IDX_DIST_Y = INPUT_COLS.index("dist_to_goal_y")
+IDX_PREV_DX = INPUT_COLS.index("prev_delta_cube_x")
+IDX_PREV_DY = INPUT_COLS.index("prev_delta_cube_y")
+
 SEED = 0
 
 
 # ---------------- Data loading ----------------
 
 def load_all_episodes(log_dir: Path, verbose: bool = True):
-    """Build (s_t, a_t) -> delta_s_t pairs from all episode CSVs."""
+    """Build (s_t, a_t) -> cube(t+1) - cube(t) pairs. Skips first/last row of each episode."""
     files = sorted(log_dir.glob("episode_*_motors.csv"))
     if not files:
         raise FileNotFoundError(f"No episodes found in {log_dir}")
 
     Xs, Ys, eps = [], [], []
-    skipped_files = 0
-    skipped_rows = 0
+    skipped_files = skipped_rows = 0
 
     for ep_idx, f in enumerate(files):
         df = pd.read_csv(f)
-        if len(df) < 2:
+        if len(df) < 3:
             skipped_files += 1
             continue
-
-        missing = [c for c in INPUT_COLS + OUTPUT_COLS if c not in df.columns]
+        missing = [c for c in BASE_INPUT_COLS + OUTPUT_COLS if c not in df.columns]
         if missing:
             print(f"WARNING: {f.name} missing columns {missing}, skipping")
             skipped_files += 1
             continue
 
-        for t in range(len(df) - 1):
-            s_t = df.iloc[t][INPUT_COLS].to_numpy(dtype=np.float32)
-            cube_next = df.iloc[t + 1][OUTPUT_COLS].to_numpy(dtype=np.float32)
-            cube_t = df.iloc[t][OUTPUT_COLS].to_numpy(dtype=np.float32)
-            delta = cube_next - cube_t
+        cube = df[OUTPUT_COLS].to_numpy(dtype=np.float32)       # (T, 2)
+        base = df[BASE_INPUT_COLS].to_numpy(dtype=np.float32)   # (T, 25)
 
-            if not (np.isfinite(s_t).all() and np.isfinite(delta).all()):
-                skipped_rows += 1
-                continue
+        # t = 1 .. T-2 (need t-1 and t+1)
+        prev_delta = cube[1:-1] - cube[:-2]
+        delta = cube[2:] - cube[1:-1]
+        s = np.concatenate([base[1:-1], prev_delta], axis=1).astype(np.float32)
 
-            Xs.append(s_t)
-            Ys.append(delta)
-            eps.append(ep_idx)
+        ok = np.isfinite(s).all(axis=1) & np.isfinite(delta).all(axis=1)
+        skipped_rows += int((~ok).sum())
+        Xs.append(s[ok])
+        Ys.append(delta[ok].astype(np.float32))
+        eps.append(np.full(ok.sum(), ep_idx, dtype=np.int64))
 
-    X = np.stack(Xs, axis=0)
-    Y = np.stack(Ys, axis=0)
-    episode_ids = np.array(eps, dtype=np.int64)
+    if not Xs:
+        raise RuntimeError("No valid transitions loaded.")
+
+    X = np.concatenate(Xs, axis=0)
+    Y = np.concatenate(Ys, axis=0)
+    episode_ids = np.concatenate(eps, axis=0)
 
     if verbose:
         print(f"Loaded {len(files)} files ({skipped_files} skipped), "
               f"{len(X)} transitions ({skipped_rows} rows skipped for NaN), "
-              f"{X.shape[1]}-dim inputs")
-
+              f"{X.shape[1]}-dim inputs, {len(np.unique(episode_ids))} usable episodes")
     return X, Y, episode_ids
 
 
-def train_val_split(X, Y, episode_ids, val_fraction, seed):
-    """Split by episode to avoid leakage."""
+def make_folds(episode_ids, k, seed):
+    """Return list of k arrays of held-out episode ids (episode-level split, no leakage)."""
     rng = np.random.default_rng(seed)
-    unique_eps = np.unique(episode_ids)
-    n_val = max(1, int(len(unique_eps) * val_fraction))
-    val_eps = set(rng.choice(unique_eps, size=n_val, replace=False))
+    unique_eps = rng.permutation(np.unique(episode_ids))
+    if k > len(unique_eps):
+        raise ValueError(f"k-folds={k} > number of episodes={len(unique_eps)}")
+    return np.array_split(unique_eps, k)
 
-    val_mask = np.isin(episode_ids, list(val_eps))
-    train_mask = ~val_mask
 
-    return (
-        X[train_mask], Y[train_mask],
-        X[val_mask], Y[val_mask],
-        sorted(val_eps),
-    )
+def split_inner_val(train_eps, frac, rng):
+    """Carve an inner validation set (by episode) out of the training episodes."""
+    train_eps = rng.permutation(train_eps)
+    n_val = max(1, int(round(len(train_eps) * frac)))
+    return train_eps[n_val:], train_eps[:n_val]   # (train, inner_val)
+
+
+# ---------------- Normalization ----------------
+
+class Normalizer:
+    def __init__(self, X_tr, Y_tr):
+        self.X_mean = X_tr.mean(axis=0)
+        self.X_std = X_tr.std(axis=0)
+        self.X_std = np.where(self.X_std < 1e-8, 1.0, self.X_std)   # constant features
+        self.Y_mean = Y_tr.mean(axis=0)
+        self.Y_std = np.where(Y_tr.std(axis=0) < 1e-8, 1.0, Y_tr.std(axis=0))
+
+    def x(self, X):
+        return ((X - self.X_mean) / self.X_std).astype(np.float32)
+
+    def y(self, Y):
+        return ((Y - self.Y_mean) / self.Y_std).astype(np.float32)
+
+    def y_inv(self, Yn):
+        return Yn * self.Y_std + self.Y_mean
+
+    def state_dict(self):
+        return dict(X_mean=self.X_mean, X_std=self.X_std, Y_mean=self.Y_mean, Y_std=self.Y_std)
 
 
 # ---------------- Model ----------------
 
 class MLP(nn.Module):
-    """One PETS ensemble member (deterministic, 3 layers)."""
-
-    def __init__(self, in_dim, out_dim, hidden=200, depth=3):
+    def __init__(self, in_dim, out_dim, hidden=256, depth=3):
         super().__init__()
-        layers = []
-        prev = in_dim
+        layers, prev = [], in_dim
         for _ in range(depth):
-            layers.append(nn.Linear(prev, hidden))
-            layers.append(nn.SiLU())
+            layers += [nn.Linear(prev, hidden), nn.SiLU()]
             prev = hidden
         layers.append(nn.Linear(prev, out_dim))
         self.net = nn.Sequential(*layers)
@@ -148,314 +161,417 @@ class MLP(nn.Module):
 
 
 class Ensemble(nn.Module):
-    """Ensemble of MLPs — PETS style."""
-
-    def __init__(self, in_dim, out_dim, n_members=5, hidden=200, depth=3):
+    def __init__(self, in_dim, out_dim, n_members=5, hidden=256, depth=3):
         super().__init__()
-        self.members = nn.ModuleList([
-            MLP(in_dim, out_dim, hidden, depth)
-            for _ in range(n_members)
-        ])
+        self.members = nn.ModuleList(
+            [MLP(in_dim, out_dim, hidden, depth) for _ in range(n_members)]
+        )
 
     def forward(self, x):
         return torch.stack([m(x) for m in self.members], dim=0)
 
     def predict_mean(self, x):
-        preds = self.forward(x)
-        return preds.mean(dim=0)
+        return self.forward(x).mean(dim=0)
 
     def predict_std(self, x):
-        preds = self.forward(x)
-        return preds.std(dim=0)
+        return self.forward(x).std(dim=0)
+
+
+def init_weights(m):
+    if isinstance(m, nn.Linear):
+        nn.init.kaiming_normal_(m.weight, nonlinearity="relu")
+        if m.bias is not None:
+            nn.init.zeros_(m.bias)
+
+
+# ---------------- LR schedule ----------------
+
+def make_lr_scheduler(optimizer, args):
+    if args.lr_schedule == "cosine":
+        def lr_lambda(epoch):
+            if epoch < args.warmup_epochs:
+                return (epoch + 1) / max(1, args.warmup_epochs)
+            progress = (epoch - args.warmup_epochs) / max(1, args.epochs - args.warmup_epochs)
+            return 0.5 * (1 + np.cos(np.pi * progress))
+        return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+    if args.lr_schedule == "step":
+        return torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.5)
+    if args.lr_schedule == "plateau":
+        return torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode="min", factor=0.5, patience=15
+        )
+    return None
 
 
 # ---------------- Training / Evaluation ----------------
 
 def train_one_epoch(model, optimizer, loader, device):
     model.train()
-    total_loss = 0.0
-    n = 0
+    total, n = 0.0, 0
     for xb, yb in loader:
-        xb = xb.to(device)
-        yb = yb.to(device)
-
-        preds = model(xb)                      # (n_members, batch, out_dim)
+        xb, yb = xb.to(device), yb.to(device)
+        preds = model(xb)                                  # (members, batch, out)
         loss = ((preds - yb.unsqueeze(0)) ** 2).mean()
-
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-
-        total_loss += loss.item() * xb.size(0)
+        total += loss.item() * xb.size(0)
         n += xb.size(0)
-
-    return total_loss / n
+    return total / max(1, n)
 
 
 @torch.no_grad()
-def evaluate(model, X, Y, device):
-    """Returns MSE, MAE (in whatever units X/Y are in) and predictions."""
+def predict_normalized(model, X_n, device, batch=4096):
+    """X_n: NORMALIZED inputs. Returns NORMALIZED ensemble-mean predictions."""
     model.eval()
-    X_t = torch.tensor(X, dtype=torch.float32, device=device)
+    X_t = torch.tensor(X_n, dtype=torch.float32, device=device)
+    out = [model.predict_mean(X_t[i:i + batch]).cpu().numpy()
+           for i in range(0, len(X_t), batch)]
+    return np.concatenate(out, axis=0)
 
-    batch = 4096
-    preds_all = []
-    for i in range(0, len(X_t), batch):
-        p = model.predict_mean(X_t[i:i+batch])
-        preds_all.append(p.cpu().numpy())
-    pred = np.concatenate(preds_all, axis=0)
 
-    mse = ((pred - Y) ** 2).mean(axis=0)
-    mae = np.abs(pred - Y).mean(axis=0)
-    return mse, mae, pred
+def regression_metrics(pred, Y):
+    err = pred - Y
+    rmse = np.sqrt((err ** 2).mean(axis=0))
+    mae = np.abs(err).mean(axis=0)
+    ss_res = (err ** 2).sum(axis=0)
+    ss_tot = ((Y - Y.mean(axis=0)) ** 2).sum(axis=0)
+    r2 = 1 - ss_res / np.where(ss_tot == 0, 1e-12, ss_tot)
+    return {"rmse": rmse, "mae": mae, "r2": r2}
+
+
+def full_eval(model, X, Y, device, norm):
+    """
+    X, Y are RAW (physical units). Inputs are normalized internally and the
+    predictions are de-normalized, so all returned metrics are in physical units.
+    """
+    pred_n = predict_normalized(model, norm.x(X), device)
+    pred = norm.y_inv(pred_n)
+    out = regression_metrics(pred, Y)
+    out["pred"] = pred
+    return out
+
+
+def normalized_mse(model, X, Y, device, norm):
+    pred_n = predict_normalized(model, norm.x(X), device)
+    return float(((pred_n - norm.y(Y)) ** 2).mean())
+
+
+# ---------------- Baselines ----------------
+
+def ridge_baseline(X_tr, Y_tr, X_te, norm, lam=1.0):
+    Xn = norm.x(X_tr)
+    Xb = np.hstack([Xn, np.ones((len(Xn), 1), dtype=np.float32)])
+    A = Xb.T @ Xb + lam * np.eye(Xb.shape[1])
+    A[-1, -1] -= lam                       # don't regularize bias
+    W = np.linalg.solve(A, Xb.T @ norm.y(Y_tr))
+    Xte = np.hstack([norm.x(X_te), np.ones((len(X_te), 1), dtype=np.float32)])
+    return norm.y_inv(Xte @ W)
+
+
+def baseline_report(X_tr, Y_tr, X_te, Y_te, norm):
+    prev = X_te[:, [IDX_PREV_DX, IDX_PREV_DY]]
+    preds = {
+        "predict train-mean": np.tile(Y_tr.mean(axis=0), (len(Y_te), 1)),
+        "predict zero": np.zeros_like(Y_te),
+        "predict prev_delta": prev,
+        "ridge (linear)": ridge_baseline(X_tr, Y_tr, X_te, norm),
+    }
+    return {name: regression_metrics(p, Y_te) for name, p in preds.items()}
 
 
 # ---------------- Goal-directedness ----------------
 
-def goal_directedness_report(X_val, Y_val, pred_val):
-    """Proxy check: does the model move the cube toward the origin?"""
-    cube_x = X_val[:, 0]
-    cube_y = X_val[:, 1]
+def resolve_goal_sign(X, Y, mode):
+    """
+    Returns s in {+1, -1} such that  s * dist_to_goal_{x,y}  points TOWARD the goal.
+      goal_minus_cube : dist = goal - cube  -> s = +1
+      cube_minus_goal : dist = cube - goal  -> s = -1
+      auto            : infer from data (sign of E[dist . delta_cube]); only a
+                        sanity heuristic, set it explicitly if you know your logging.
+    """
+    if mode == "goal_minus_cube":
+        return 1.0
+    if mode == "cube_minus_goal":
+        return -1.0
+    score = float((X[:, IDX_DIST_X] * Y[:, 0] + X[:, IDX_DIST_Y] * Y[:, 1]).mean())
+    s = 1.0 if score >= 0 else -1.0
+    print(f"[goal sign auto-detect] mean(dist . delta_cube) = {score:+.3e} -> "
+          f"{'goal - cube' if s > 0 else 'cube - goal'} convention (s={s:+.0f})")
+    return s
 
-    pred_toward_x = (cube_x * pred_val[:, 0]) < 0
-    true_toward_x = (cube_x * Y_val[:, 0]) < 0
-    pred_toward_y = (cube_y * pred_val[:, 1]) < 0
-    true_toward_y = (cube_y * Y_val[:, 1]) < 0
 
-    print(f"\nGoal-directedness proxy (toward origin):")
-    print(f"  X-axis  — model: {pred_toward_x.mean():.2%}, "
-          f"ground truth: {true_toward_x.mean():.2%}")
-    print(f"  Y-axis  — model: {pred_toward_y.mean():.2%}, "
-          f"ground truth: {true_toward_y.mean():.2%}")
-
-
-def check_goal_direction(X_val_raw, Y_val, pred_val, episode_ids_val, log_dir):
-    """Compare model-predicted and ground-truth goal-directedness."""
-    episodes_csv = log_dir.parent / "episodes.csv"
-    if not episodes_csv.exists():
-        print(f"\n[goal check] episodes.csv not found at {episodes_csv}")
-        return
-
-    ep_df = pd.read_csv(episodes_csv)
-    ep_df = ep_df.drop_duplicates(subset="episode", keep="last")
-    ep_df = ep_df.set_index("episode")
-
-    motor_files = sorted(log_dir.glob("episode_*_motors.csv"))
-
-    counts = {
-        "closer": 0, "farther": 0, "equal": 0,
-        "true_closer": 0, "true_farther": 0, "true_equal": 0,
-        "skipped": 0,
-    }
-
-    for i in range(len(X_val_raw)):
-        file_idx = int(episode_ids_val[i])
-        if file_idx >= len(motor_files):
-            counts["skipped"] += 1
+def goal_directedness(X, Y, pred, goal_sign, min_dist=0.005):
+    """
+    Fraction of samples where the cube's step is toward the goal along each axis,
+    for ground truth vs. model, restricted to samples at least `min_dist` away
+    from the goal on that axis (otherwise 'toward' is meaningless).
+    Also reports sign agreement between model and ground truth.
+    """
+    out = {}
+    for ax, idx, name in [(0, IDX_DIST_X, "x"), (1, IDX_DIST_Y, "y")]:
+        toward = goal_sign * X[:, idx]                 # >0 means goal is in +axis direction
+        mask = np.abs(toward) > min_dist
+        if mask.sum() == 0:
+            out[name] = dict(n=0, model=np.nan, truth=np.nan, agree=np.nan)
             continue
-
-        fname = motor_files[file_idx].stem
-        try:
-            ep_num = int(fname.split("_")[1])
-        except (IndexError, ValueError):
-            counts["skipped"] += 1
-            continue
-
-        if ep_num not in ep_df.index:
-            counts["skipped"] += 1
-            continue
-
-        row = ep_df.loc[ep_num]
-        goal_x = float(row["goal_x"])
-        goal_y = float(row["goal_y"])
-
-        if not np.isfinite(goal_x) or not np.isfinite(goal_y):
-            counts["skipped"] += 1
-            continue
-
-        cx = float(X_val_raw[i, 0])
-        cy = float(X_val_raw[i, 1])
-        dx = float(pred_val[i, 0])
-        dy = float(pred_val[i, 1])
-
-        d_before = np.hypot(cx - goal_x, cy - goal_y)
-
-        # Model-predicted next position
-        d_after_pred = np.hypot(cx + dx - goal_x, cy + dy - goal_y)
-
-        # Ground-truth next position
-        d_after_true = np.hypot(
-            cx + float(Y_val[i, 0]) - goal_x,
-            cy + float(Y_val[i, 1]) - goal_y,
+        t, y, p = toward[mask], Y[mask, ax], pred[mask, ax]
+        out[name] = dict(
+            n=int(mask.sum()),
+            model=float(((t * p) > 0).mean()),
+            truth=float(((t * y) > 0).mean()),
+            agree=float((np.sign(p) == np.sign(y)).mean()),
         )
+    return out
 
-        if d_after_pred < d_before - 1e-9:
-            counts["closer"] += 1
-        elif d_after_pred > d_before + 1e-9:
-            counts["farther"] += 1
-        else:
-            counts["equal"] += 1
 
-        if d_after_true < d_before - 1e-9:
-            counts["true_closer"] += 1
-        elif d_after_true > d_before + 1e-9:
-            counts["true_farther"] += 1
-        else:
-            counts["true_equal"] += 1
+# ---------------- Single training run ----------------
 
-    total_pred = counts["closer"] + counts["farther"] + counts["equal"]
-    total_true = counts["true_closer"] + counts["true_farther"] + counts["true_equal"]
+def train_model(X_tr, Y_tr, X_es, Y_es, args, device, tag=""):
+    """
+    Fit on (X_tr, Y_tr), choose best epoch on (X_es, Y_es) [early-stopping set].
+    Returns best model (restored), normalizer, history dict.
+    """
+    norm = Normalizer(X_tr, Y_tr)
 
-    print(f"\nGoal-directedness (using episodes.csv goals):")
-    if total_pred > 0:
-        print(f"  Model predictions:")
-        print(f"    closer  : {counts['closer'] / total_pred:.2%}")
-        print(f"    farther : {counts['farther'] / total_pred:.2%}")
-        print(f"    equal   : {counts['equal'] / total_pred:.2%}")
-    if total_true > 0:
-        print(f"  Ground truth:")
-        print(f"    closer  : {counts['true_closer'] / total_true:.2%}")
-        print(f"    farther : {counts['true_farther'] / total_true:.2%}")
-        print(f"    equal   : {counts['true_equal'] / total_true:.2%}")
-    print(f"  Skipped: {counts['skipped']} rows")
+    train_ds = TensorDataset(torch.tensor(norm.x(X_tr)), torch.tensor(norm.y(Y_tr)))
+    loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
+                        num_workers=0, drop_last=len(train_ds) > args.batch_size)
+
+    model = Ensemble(X_tr.shape[1], Y_tr.shape[1], args.ensemble,
+                     args.hidden, args.depth).to(device)
+    model.apply(init_weights)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr,
+                                 weight_decay=args.weight_decay)
+    scheduler = make_lr_scheduler(optimizer, args)
+
+    best_mse, best_state, best_epoch = float("inf"), None, -1
+    hist = dict(epochs=[], train_mse=[], val_mse=[], train_r2=[], val_r2=[])
+    t0 = time.time()
+
+    for epoch in range(1, args.epochs + 1):
+        tr_loss = train_one_epoch(model, optimizer, loader, device)
+        es_mse = normalized_mse(model, X_es, Y_es, device, norm)
+
+        if es_mse < best_mse:
+            best_mse, best_epoch = es_mse, epoch
+            best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+
+        if epoch == 1 or epoch % args.log_every == 0 or epoch == args.epochs:
+            tr_m = full_eval(model, X_tr, Y_tr, device, norm)
+            es_m = full_eval(model, X_es, Y_es, device, norm)
+            hist["epochs"].append(epoch)
+            hist["train_mse"].append(tr_loss)
+            hist["val_mse"].append(es_mse)
+            hist["train_r2"].append(tr_m["r2"].copy())
+            hist["val_r2"].append(es_m["r2"].copy())
+            print(f"{tag}epoch {epoch:4d} | lr {optimizer.param_groups[0]['lr']:.2e} | "
+                  f"MSE(n) tr {tr_loss:.4f} val {es_mse:.4f} | "
+                  f"RMSE mm tr x={tr_m['rmse'][0]*1000:.2f} y={tr_m['rmse'][1]*1000:.2f} "
+                  f"val x={es_m['rmse'][0]*1000:.2f} y={es_m['rmse'][1]*1000:.2f} | "
+                  f"R2 tr x={tr_m['r2'][0]:+.3f} y={tr_m['r2'][1]:+.3f} "
+                  f"val x={es_m['r2'][0]:+.3f} y={es_m['r2'][1]:+.3f}")
+
+        if args.lr_schedule == "plateau":
+            scheduler.step(es_mse)
+        elif scheduler is not None:
+            scheduler.step()
+
+    print(f"{tag}done in {time.time() - t0:.1f}s, best early-stop MSE(n) "
+          f"{best_mse:.5f} at epoch {best_epoch}")
+    model.load_state_dict(best_state)
+    hist["best_epoch"] = best_epoch
+    return model, norm, hist
+
+
+def plot_learning_curves(hist, out_path):
+    ep = hist["epochs"]
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+    axes[0].plot(ep, hist["train_mse"], label="train")
+    axes[0].plot(ep, hist["val_mse"], label="early-stop val")
+    axes[0].set_yscale("log")
+    axes[0].set_title("Loss (normalized MSE)")
+    for i, name in enumerate(["x", "y"], start=1):
+        axes[i].plot(ep, [r[i - 1] for r in hist["train_r2"]], label="train")
+        axes[i].plot(ep, [r[i - 1] for r in hist["val_r2"]], label="early-stop val")
+        axes[i].axhline(0, color="k", ls="--", alpha=0.3)
+        axes[i].set_title(f"R2 for delta_cube_{name}")
+    for a in axes:
+        a.set_xlabel("Epoch")
+        a.grid(True, alpha=0.3)
+        a.legend()
+        a.axvline(hist["best_epoch"], color="r", ls=":", alpha=0.4)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=100)
+    plt.close()
+
+
+# ---------------- Reporting ----------------
+
+def mean_std(vals):
+    v = np.array(vals, dtype=np.float64)
+    return v.mean(axis=0), v.std(axis=0)
+
+
+def print_fold_table(fold, model_m, base_m, gd):
+    print(f"\n--- Fold {fold}: held-out results (physical units) ---")
+    hdr = f"{'Model':<24} {'RMSE x (mm)':>12} {'RMSE y (mm)':>12} {'MAE x':>8} {'MAE y':>8} {'R2 x':>8} {'R2 y':>8}"
+    print(hdr)
+    print("-" * len(hdr))
+
+    def row(name, m):
+        print(f"{name:<24} {m['rmse'][0]*1000:>12.3f} {m['rmse'][1]*1000:>12.3f} "
+              f"{m['mae'][0]*1000:>8.3f} {m['mae'][1]*1000:>8.3f} "
+              f"{m['r2'][0]:>8.4f} {m['r2'][1]:>8.4f}")
+
+    row("MLP ensemble", model_m)
+    for name, m in base_m.items():
+        row(name, m)
+    for ax in ("x", "y"):
+        g = gd[ax]
+        print(f"goal-directed {ax}: n={g['n']}, model {g['model']:.1%}, "
+              f"truth {g['truth']:.1%}, model/truth sign agreement {g['agree']:.1%}")
+
+
+def print_cv_summary(results, base_names):
+    print("\n" + "=" * 90)
+    print(f"CROSS-VALIDATION SUMMARY  ({len(results)} folds, mean ± std across folds)")
+    print("=" * 90)
+    hdr = f"{'Model':<24} {'RMSE x (mm)':>16} {'RMSE y (mm)':>16} {'R2 x':>14} {'R2 y':>14}"
+    print(hdr)
+    print("-" * len(hdr))
+
+    def line(name, getter):
+        rm, rs = mean_std([getter(r)["rmse"] * 1000 for r in results])
+        r2m, r2s = mean_std([getter(r)["r2"] for r in results])
+        print(f"{name:<24} {rm[0]:>9.3f}±{rs[0]:<6.3f} {rm[1]:>9.3f}±{rs[1]:<6.3f} "
+              f"{r2m[0]:>7.4f}±{r2s[0]:<6.4f} {r2m[1]:>7.4f}±{r2s[1]:<6.4f}")
+
+    line("MLP ensemble (test)", lambda r: r["model"])
+    line("MLP ensemble (train)", lambda r: r["train"])
+    for b in base_names:
+        line(b, lambda r, b=b: r["base"][b])
+
+    mean_name = "predict train-mean"
+    red = np.array([1 - r["model"]["rmse"] / r["base"][mean_name]["rmse"] for r in results])
+    print(f"\nRMSE reduction vs predict-mean: x {red[:, 0].mean():.1%} ± {red[:, 0].std():.1%}, "
+          f"y {red[:, 1].mean():.1%} ± {red[:, 1].std():.1%}")
+
+    print("\nGoal-directedness (fraction of steps moving toward goal):")
+    for ax in ("x", "y"):
+        m = np.nanmean([r["gd"][ax]["model"] for r in results])
+        t = np.nanmean([r["gd"][ax]["truth"] for r in results])
+        a = np.nanmean([r["gd"][ax]["agree"] for r in results])
+        print(f"  {ax}-axis: model {m:.1%} | truth {t:.1%} | model/truth sign agreement {a:.1%}")
+
+    r2 = np.array([r["model"]["r2"] for r in results])
+    tr_r2 = np.array([r["train"]["r2"] for r in results])
+    gap = (tr_r2 - r2).mean()
+    print("\nINTERPRETATION")
+    print(f"  mean test R2 = {r2.mean():.3f}, mean train-test R2 gap = {gap:.3f}")
+    if r2.mean() < 0.1:
+        print("  -> Little predictable signal. Check ridge/prev_delta baselines, label noise,")
+        print("     and consider multi-step targets or more history.")
+    elif gap > 0.2:
+        print("  -> Overfitting. Reduce size, raise weight decay, or add data.")
+    else:
+        print("  -> Reasonable fit. Compare against the ridge baseline to see how much the MLP adds.")
 
 
 # ---------------- Main ----------------
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--epochs", type=int, default=100)
-    parser.add_argument("--ensemble", type=int, default=5)
-    parser.add_argument("--hidden", type=int, default=200)
-    parser.add_argument("--depth", type=int, default=3)
-    parser.add_argument("--batch-size", type=int, default=256)
-    parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--val-fraction", type=float, default=VAL_FRACTION)
-    parser.add_argument("--seed", type=int, default=SEED)
-    args = parser.parse_args()
+    p = argparse.ArgumentParser()
+    p.add_argument("--log-dir", type=str, required=True, help="Dir with episode_*_motors.csv")
+    p.add_argument("--out-dir", type=str, default="./dynamics_out")
+    p.add_argument("--k-folds", type=int, default=5)
+    p.add_argument("--inner-val-fraction", type=float, default=0.10,
+                   help="Fraction of TRAIN episodes used for early stopping in each fold")
+    p.add_argument("--epochs", type=int, default=300)
+    p.add_argument("--ensemble", type=int, default=5)
+    p.add_argument("--hidden", type=int, default=256)
+    p.add_argument("--depth", type=int, default=3)
+    p.add_argument("--batch-size", type=int, default=512)
+    p.add_argument("--lr", type=float, default=3e-4)
+    p.add_argument("--weight-decay", type=float, default=1e-5)
+    p.add_argument("--warmup-epochs", type=int, default=10)
+    p.add_argument("--lr-schedule", type=str, default="cosine",
+                   choices=["cosine", "step", "plateau", "none"])
+    p.add_argument("--goal-convention", type=str, default="auto",
+                   choices=["auto", "goal_minus_cube", "cube_minus_goal"],
+                   help="How dist_to_goal_{x,y} is defined in your logs")
+    p.add_argument("--goal-min-dist", type=float, default=0.005,
+                   help="Ignore samples closer than this to the goal (per axis) in goal-directedness")
+    p.add_argument("--no-final-model", action="store_true",
+                   help="Skip training a final model on all data after CV")
+    p.add_argument("--seed", type=int, default=SEED)
+    p.add_argument("--log-every", type=int, default=25)
+    args = p.parse_args()
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    # ---- Data ----
-    X, Y, ep_ids = load_all_episodes(MOTOR_LOG_DIR)
-    X_tr, Y_tr, X_val, Y_val, val_eps = train_val_split(
-        X, Y, ep_ids, args.val_fraction, args.seed
-    )
-    print(f"Train: {len(X_tr)} samples  "
-          f"Val: {len(X_val)} samples (episodes: {val_eps})")
+    X, Y, ep_ids = load_all_episodes(Path(args.log_dir))
+    goal_sign = resolve_goal_sign(X, Y, args.goal_convention)
 
-    # ---- Normalization (train stats only) ----
-    X_mean = X_tr.mean(axis=0)
-    X_std = X_tr.std(axis=0) + 1e-8
-    Y_mean = Y_tr.mean(axis=0)
-    Y_std = Y_tr.std(axis=0) + 1e-8
+    folds = make_folds(ep_ids, args.k_folds, args.seed)
+    rng = np.random.default_rng(args.seed + 1)
+    all_eps = np.unique(ep_ids)
 
-    X_tr_n = (X_tr - X_mean) / X_std
-    X_val_n = (X_val - X_mean) / X_std
-    Y_tr_n = (Y_tr - Y_mean) / Y_std
-    Y_val_n = (Y_val - Y_mean) / Y_std
+    results, fold_states = [], []
+    for k, test_eps in enumerate(folds):
+        print("\n" + "=" * 90)
+        print(f"FOLD {k + 1}/{len(folds)}  (held-out episodes: {len(test_eps)})")
+        print("=" * 90)
 
-    # ---- DataLoader ----
-    train_ds = TensorDataset(
-        torch.tensor(X_tr_n, dtype=torch.float32),
-        torch.tensor(Y_tr_n, dtype=torch.float32),
-    )
-    train_loader = DataLoader(
-        train_ds, batch_size=args.batch_size, shuffle=True,
-        num_workers=0, drop_last=True,
-    )
+        rest = np.setdiff1d(all_eps, test_eps)
+        tr_eps, es_eps = split_inner_val(rest, args.inner_val_fraction, rng)
 
-    # ---- Model ----
-    model = Ensemble(
-        in_dim=X.shape[1], out_dim=Y.shape[1],
-        n_members=args.ensemble,
-        hidden=args.hidden, depth=args.depth,
-    ).to(device)
-    n_params = sum(p.numel() for p in model.parameters())
-    print(f"Ensemble of {args.ensemble} MLPs, "
-          f"{n_params:,} params total")
+        m_tr, m_es, m_te = (np.isin(ep_ids, e) for e in (tr_eps, es_eps, test_eps))
+        X_tr, Y_tr = X[m_tr], Y[m_tr]
+        X_es, Y_es = X[m_es], Y[m_es]
+        X_te, Y_te = X[m_te], Y[m_te]
+        print(f"train {len(X_tr)} ({len(tr_eps)} eps) | early-stop {len(X_es)} ({len(es_eps)} eps) "
+              f"| test {len(X_te)} ({len(test_eps)} eps)")
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+        model, norm, hist = train_model(X_tr, Y_tr, X_es, Y_es, args, device, tag=f"[f{k + 1}] ")
+        plot_learning_curves(hist, out_dir / f"learning_curves_fold{k + 1}.png")
 
-    # ---- Train ----
-    t0 = time.time()
-    best_val_mse = float("inf")
-    best_state = None
+        te = full_eval(model, X_te, Y_te, device, norm)
+        tr = full_eval(model, X_tr, Y_tr, device, norm)
+        base = baseline_report(X_tr, Y_tr, X_te, Y_te, norm)
+        gd = goal_directedness(X_te, Y_te, te["pred"], goal_sign, args.goal_min_dist)
+        print_fold_table(k + 1, te, base, gd)
 
-    for epoch in range(1, args.epochs + 1):
-        tr_loss = train_one_epoch(model, optimizer, train_loader, device)
-        val_mse_n, val_mae_n, _ = evaluate(model, X_val_n, Y_val_n, device)
-        val_mse_mean = float(val_mse_n.mean())
+        results.append(dict(model=te, train=tr, base=base, gd=gd))
+        fold_states.append(dict(model_state_dict=model.state_dict(), norm=norm.state_dict(),
+                                test_episodes=test_eps.tolist(), best_epoch=hist["best_epoch"]))
 
-        if val_mse_mean < best_val_mse:
-            best_val_mse = val_mse_mean
-            best_state = {k: v.cpu().clone()
-                          for k, v in model.state_dict().items()}
+    print_cv_summary(results, list(results[0]["base"].keys()))
 
-        if epoch % 5 == 0 or epoch == 1:
-            print(f"epoch {epoch:4d}  "
-                  f"train MSE (norm): {tr_loss:.5f}  "
-                  f"val MSE (norm): {val_mse_mean:.5f}  "
-                  f"val MAE (norm): {val_mae_n.mean():.5f}")
+    ckpt = dict(input_cols=INPUT_COLS, output_cols=OUTPUT_COLS, args=vars(args))
+    torch.save({**ckpt, "folds": fold_states}, out_dir / "dynamics_cv_folds.pt")
+    print(f"\nSaved per-fold models to {out_dir / 'dynamics_cv_folds.pt'}")
 
-    elapsed = time.time() - t0
-    print(f"\nTraining done in {elapsed:.1f}s")
-    print(f"Best val MSE (norm): {best_val_mse:.5f}")
-
-    # ---- Restore best ----
-    if best_state is not None:
-        model.load_state_dict(best_state)
-
-    # ---- Evaluate in physical units ----
-    _, _, pred_val_n = evaluate(model, X_val_n, Y_val_n, device)
-    pred_val = pred_val_n * Y_std + Y_mean
-
-    residual = pred_val - Y_val
-    val_mse_phys = (residual ** 2).mean(axis=0)
-    val_mae_phys = np.abs(residual).mean(axis=0)
-
-    print(f"\nValidation MSE (physical units):")
-    print(f"  Δcube_x: {val_mse_phys[0]:.12f} m²  "
-          f"(RMSE {np.sqrt(val_mse_phys[0]) * 1000:.4f} mm)")
-    print(f"  Δcube_y: {val_mse_phys[1]:.12f} m²  "
-          f"(RMSE {np.sqrt(val_mse_phys[1]) * 1000:.4f} mm)")
-
-    print(f"Validation MAE (physical units):")
-    print(f"  Δcube_x: {val_mae_phys[0] * 1000:.4f} mm")
-    print(f"  Δcube_y: {val_mae_phys[1] * 1000:.4f} mm")
-
-    # Baseline (predict mean)
-    baseline_mse = ((Y_val - Y_val.mean(axis=0)) ** 2).mean(axis=0)
-    print(f"\nBaseline (predict mean) RMSE:")
-    print(f"  Δcube_x: {np.sqrt(baseline_mse[0]) * 1000:.4f} mm")
-    print(f"  Δcube_y: {np.sqrt(baseline_mse[1]) * 1000:.4f} mm")
-
-    print(f"\nDelta magnitude reference:")
-    print(f"  Mean |Δcube_x|: {np.abs(Y_val[:, 0]).mean() * 1000:.4f} mm")
-    print(f"  Mean |Δcube_y|: {np.abs(Y_val[:, 1]).mean() * 1000:.4f} mm")
-
-    # ---- Goal-directedness ----
-    goal_directedness_report(X_val, Y_val, pred_val)
-
-    # Rebuild the episode index list for the val set
-    X_all_eps = ep_ids[np.isin(ep_ids, val_eps)]
-    check_goal_direction(X_val, Y_val, pred_val, X_all_eps, MOTOR_LOG_DIR)
-
-    # ---- Save ----
-    torch.save({
-        "model_state_dict": model.state_dict(),
-        "X_mean": X_mean, "X_std": X_std,
-        "Y_mean": Y_mean, "Y_std": Y_std,
-        "input_cols": INPUT_COLS,
-        "output_cols": OUTPUT_COLS,
-        "val_episodes": val_eps,
-    }, OUT_DIR / "dynamics_model.pt")
-    print(f"\nSaved model to {OUT_DIR / 'dynamics_model.pt'}")
+    # ---- Final model on all episodes (inner split only for epoch selection) ----
+    if not args.no_final_model:
+        print("\n" + "=" * 90)
+        print("FINAL MODEL (all episodes; inner split for early stopping only)")
+        print("=" * 90)
+        tr_eps, es_eps = split_inner_val(all_eps, args.inner_val_fraction, rng)
+        m_tr, m_es = np.isin(ep_ids, tr_eps), np.isin(ep_ids, es_eps)
+        model, norm, hist = train_model(X[m_tr], Y[m_tr], X[m_es], Y[m_es], args, device, tag="[final] ")
+        plot_learning_curves(hist, out_dir / "learning_curves_final.png")
+        torch.save({**ckpt, "model_state_dict": model.state_dict(), **norm.state_dict(),
+                    "best_epoch": hist["best_epoch"], "early_stop_episodes": es_eps.tolist()},
+                   out_dir / "dynamics_model.pt")
+        print(f"Saved final model to {out_dir / 'dynamics_model.pt'}")
+        print("NOTE: CV metrics above are the honest performance estimate; the final model "
+              "has no held-out test set.")
 
 
 if __name__ == "__main__":
