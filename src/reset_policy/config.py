@@ -39,9 +39,9 @@ class DynamixelConfig:
     
     # Control
     max_encoder_delta: int = 150       # Max ticks per action
-    max_encoder_travel: int = 1000000    # Max total travel from initial
+    max_encoder_travel: int = 10000    # Max total travel from initial
     action_duration: float = 0.8       # Seconds to wait after action
-    
+    current_limit_mA: float = 1750.0
     # Addresses
     addr_operating_mode: int = 11
     addr_torque_enable: int = 64

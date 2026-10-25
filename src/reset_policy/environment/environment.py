@@ -22,7 +22,7 @@ from gymnasium import spaces
 
 import sys
 from pathlib import Path
-sys.path.append(str(Path(__file__).resolve().parent.parent))
+sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
 from reset_policy.control.safety_filter import SafetyFilter
 from reset_policy.environment.observation import ObservationBuilder
@@ -232,7 +232,7 @@ class ResetPolicyEnv(gym.Env):
         self.grid.visit(observation.cube_x, observation.cube_y)
         self.last_valid_observation = observation
         
-        return observation.as_numpy(), {}
+        return observation.as_numpy(), {"goal_position": (x_goal, y_goal), "cube_position": (x, y)}
     
     
     def step(self, action):
@@ -314,8 +314,6 @@ class ResetPolicyEnv(gym.Env):
         reward = reward_info.total 
         if distance_to_goal < self.goal_success_threshold:
             reward += 1.0  # Bonus for reaching goal
-
-        reward = np.clip(reward, 0, 1.0)
         
         # Apply safety penalty
         safety_penalty = self._compute_safety_penalty(safety_info) + out_of_bound_penalty
@@ -350,6 +348,7 @@ class ResetPolicyEnv(gym.Env):
             "goal_reached": distance_to_goal < self.goal_success_threshold,
             "steps": self.step_count,
             "visits": visits,
+            "total_reward": reward, #fianl reward after clipping
             "distance_reward": reward_info.distance_reward,
             "current_change_penalty": reward_info.current_change_penalty,
             "hardware_error_penalty": reward_info.hardware_error_penalty,
@@ -364,10 +363,11 @@ class ResetPolicyEnv(gym.Env):
             "execution_success": True,
             "termination_reason": termination_reason,
             "out_of_bounds_penalty": out_of_bound_penalty,
-            "action_modified": safety_info['modified'],
+            "executed_actions": np.asarray(safety_info['action'], dtype=np.float32),
+            "action_modified": safety_info['modified'], #boolean
             "safety_reason": safety_info['reason'],
             "safety_detail": safety_info['detail'],
-            "safety_penalty": safety_penalty,
+            "safety_filtering_penalty": safety_penalty,
             "modification_magnitude": safety_info['magnitude'],
         }
         
@@ -516,6 +516,7 @@ class ResetPolicyEnv(gym.Env):
             "goal_position": (x_goal, y_goal),
             "cube_position": (observation.cube_x, observation.cube_y),
             "goal_reached": False,
+            "total_reward": reward,
             "distance_reward": reward_info.distance_reward,
             "current_change_penalty": reward_info.current_change_penalty,
             "hardware_error_penalty": reward_info.hardware_error_penalty,
@@ -531,7 +532,11 @@ class ResetPolicyEnv(gym.Env):
             "action_modified": safety_info['modified'],
             "safety_reason": safety_info['reason'],
             "safety_detail": safety_info['detail'],
-            "safety_penalty": safety_penalty,
+            "executed_actions": np.asarray(
+                safety_info.get('action', np.zeros(4, dtype=np.float32)),
+                dtype=np.float32,
+            ),
+            "safety_filtering_penalty": safety_penalty,
             "modification_magnitude": safety_info['magnitude'],
         }
         
@@ -540,18 +545,18 @@ class ResetPolicyEnv(gym.Env):
     def _handle_observation_failure(self, safety_info):
         """Handle observation failures (non-hardware)."""
         print("WARNING: Observation result is None (non-hardware failure)")
-        
+
         observation = self.last_valid_observation
         if observation is None:
             print("WARNING: No valid observation available, using zeros")
             observation = self._create_zero_observation()
-        
+
         # Get goal position (or use current as fallback)
         if self.goal_position is not None:
             x_goal, y_goal = self.goal_position
         else:
             x_goal, y_goal = observation.cube_x, observation.cube_y
-        
+
         reward_info = self.reward_fn.compute(
             cube_x=observation.cube_x,
             cube_y=observation.cube_y,
@@ -560,12 +565,17 @@ class ResetPolicyEnv(gym.Env):
             motor_currents=observation.motor_currents,
             hardware_error=False,
         )
-        
+
+        reward = reward_info.total
+
         info = {
-            "distance_to_goal": np.sqrt((observation.cube_x - x_goal)**2 + (observation.cube_y - y_goal)**2),
+            "distance_to_goal": np.sqrt(
+                (observation.cube_x - x_goal) ** 2 + (observation.cube_y - y_goal) ** 2
+            ),
             "goal_position": (x_goal, y_goal),
             "cube_position": (observation.cube_x, observation.cube_y),
             "goal_reached": False,
+            "total_reward": reward,                                  # ← ADDED
             "distance_reward": reward_info.distance_reward,
             "current_change_penalty": reward_info.current_change_penalty,
             "hardware_error_penalty": reward_info.hardware_error_penalty,
@@ -580,12 +590,15 @@ class ResetPolicyEnv(gym.Env):
             "action_modified": safety_info['modified'],
             "safety_reason": safety_info['reason'],
             "safety_detail": safety_info['detail'],
-            "safety_penalty": 0.0,
+            "executed_actions": np.asarray(                          
+                safety_info.get('action', np.zeros(4, dtype=np.float32)),
+                dtype=np.float32,
+            ),
+            "safety_filtering_penalty": 0.0,                      
             "modification_magnitude": safety_info['magnitude'],
         }
-        
-        return observation.as_numpy(), reward_info.total, True, False, info
-    
+
+        return observation.as_numpy(), reward, True, False, info
     
     # Repositioning
     def reposition_cube_to_center(self, max_attempts=30, min_movement=0.003, max_stuck_retries=5):

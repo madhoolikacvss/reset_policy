@@ -151,8 +151,13 @@ def train(env, config=config):
                 'goal_y': goal_pos[1],
                 'distance_reward': info.get('distance_reward'),
                 'obs': obs_before.tolist(),
-                'safety_penalty': info.get('safety_penalty'),
+                'total_reward':info.get('total_reward'),
+                'current_change_penalty': info.get('current_change_penalty'), 
+                'hardware_error_penalty': info.get('hardware_error_penalty'), 
+                'tension_penalty': info.get('tension_penalty'), 
+                'safety_filtering_penalty': info.get('safety_penalty'),
                 'actions': action_np.tolist(),
+                'executed_actions': info.get('executed_actions'),
             }
 
             # --- Capture post-step motor state (for motor_data) ---

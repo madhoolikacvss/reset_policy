@@ -1,0 +1,13 @@
+timestamp,action_count,motor_id,target_position,present_position,present_current_mA,present_voltage_V,temperature_C,torque_enabled,present_pwm,present_velocity,hardware_error_status,hardware_error_hex,packet_error,packet_error_hex,hardware_error_decoded
+2026-09-25T15:51:18.315542,0,16,2643,2643,0,5.2,26,1,0,1,0,0x00,,None,No hardware error
+2026-09-25T15:51:18.315595,0,17,1277,1277,0,5.2,24,1,0,1,0,0x00,,None,No hardware error
+2026-09-25T15:51:18.315623,0,18,188,188,0,5.2,27,1,0,1,0,0x00,,None,No hardware error
+2026-09-25T15:51:18.315649,0,19,3999,3999,0,5.2,24,1,0,1,0,0x00,,None,No hardware error
+2026-09-25T16:17:03.464033,0,16,2418,2418,0,5.2,24,1,0,1,0,0x00,,None,No hardware error
+2026-09-25T16:17:03.464097,0,17,1352,1352,0,5.2,22,1,0,1,0,0x00,,None,No hardware error
+2026-09-25T16:17:03.464128,0,18,3934,3934,0,5.2,24,1,0,0,0,0x00,,None,No hardware error
+2026-09-25T16:17:03.464153,0,19,538,538,11,5.2,22,1,1,1,0,0x00,,None,No hardware error
+2026-09-25T16:32:41.226925,0,16,1921,1921,0,5.2,26,1,0,1,0,0x00,,None,No hardware error
+2026-09-25T16:32:41.226991,0,17,2000,2000,0,5.2,26,1,0,1,0,0x00,,None,No hardware error
+2026-09-25T16:32:41.227023,0,18,3538,3538,0,5.2,26,1,0,1,0,0x00,,None,No hardware error
+2026-09-25T16:32:41.227050,0,19,344,344,0,5.2,24,1,0,1,0,0x00,,None,No hardware error

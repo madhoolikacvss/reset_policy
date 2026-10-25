@@ -45,32 +45,6 @@ TAG_SIZE = 0.05
 WORLD_TAG_ID = 0
 CUBE_TAG_ID = 1
 
-
-# def create_dynamixel_bus():
-#     """Initialize Dynamixel communication."""
-#     from dynamixel_sdk import PortHandler, PacketHandler, GroupSyncWrite
-    
-#     port = PortHandler(config.dynamixel.port_name)
-#     packet = PacketHandler(config.dynamixel.protocol_version)
-    
-#     if not port.openPort():
-#         raise RuntimeError("Cannot open Dynamixel port")
-    
-#     if not port.setBaudRate(config.dynamixel.baudrate):
-#         raise RuntimeError("Cannot set baudrate")
-    
-#     print("Dynamixel connected")
-    
-#     # Ping all motors
-#     for motor_id in config.motor.motor_ids:
-#         model, comm, error = packet.ping(port, motor_id)
-#         print(f"Motor {motor_id}: {model}, {packet.getTxRxResult(comm)}, {packet.getRxPacketError(error)}")
-    
-#     # Create sync write for goal position (address 116, 4 bytes)
-#     sync_write = GroupSyncWrite(port, packet, 116, 4)
-    
-#     return port, packet, sync_write
-
 def create_dynamixel_bus():
     """Initialize Dynamixel communication."""
     from dynamixel_sdk import (

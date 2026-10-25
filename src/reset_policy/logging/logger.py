@@ -38,7 +38,7 @@ class TrainingLogger:
         self.training_metrics_file = self.log_dir / "training_metrics.csv"
 
         # Motor log management
-        self.max_motor_logs = 1000
+        self.max_motor_logs = 10000
         self.current_motor_file = None
         self.current_motor_writer = None
 
@@ -156,9 +156,10 @@ class TrainingLogger:
 
             # Actions (4-dim)
             "action_m16", "action_m17", "action_m18", "action_m19",
+            "executed_m16", "executed_m17","executed_m18", "executed_m19",
 
-            # total safety penalty
-            "total_safety_penalty",
+            # rewards and penalty
+            "total_reward", "current_change_penalty", "hardware_error_penalty", "tension_penalty" ,"safety_filtering_penalty",
         ])
 
         # Clean up old motor logs
@@ -178,7 +179,13 @@ class TrainingLogger:
                 'distance_reward'            # per-step distance reward
                 'obs'                        # 20-dim observation array
                 'actions'                    # 4-dim action array
-                'safety_penalty'             # total safety penalty this step
+                'executed_actions'
+                'total_reward':,
+                'current_change_penalty':, 
+                'hardware_error_penalty':, 
+                'tension_penalty':, 
+                'safety_filtering_penalty'
+                
         """
         if self.current_motor_writer is None:
             return
@@ -212,8 +219,14 @@ class TrainingLogger:
 
         # Actions (4 dims)
         actions = obs_data.get('actions', motor_data.get('actions', [None] * 4))
-
-        safety_penalty = obs_data.get('safety_penalty')
+        executed_actions = obs_data.get('executed_actions')
+        if executed_actions is None:
+            executed_actions = [None] * 4
+        total_reward = obs_data.get('total_reward')
+        current_change_penalty = obs_data.get('current_change_penalty')
+        hardware_error_penalty = obs_data.get('hardware_error_penalty')
+        tension_penalty = obs_data.get('tension_penalty')
+        safety_filtering_penalty = obs_data.get('safety_filtering_penalty')
 
         self.current_motor_writer.writerow([
             step_num,
@@ -238,7 +251,8 @@ class TrainingLogger:
 
             # Actions
             actions[0], actions[1], actions[2], actions[3],
-            safety_penalty,
+            executed_actions[0], executed_actions[1], executed_actions[2], executed_actions[3],
+            total_reward,current_change_penalty, hardware_error_penalty, tension_penalty, safety_filtering_penalty,
         ])
 
         # Flush periodically
