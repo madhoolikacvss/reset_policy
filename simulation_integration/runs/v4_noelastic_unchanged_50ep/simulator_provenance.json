@@ -1,0 +1,7 @@
+{
+  "simulator": "v4_noelastic_unchanged",
+  "simulator_directory": "C:\\Users\\madho\\OneDrive - UC San Diego\\Desktop\\ys_lab\\sac_sim\\reset_policy_simulation\\v4_noelastic_unchanged",
+  "source_params": "C:\\Users\\madho\\OneDrive - UC San Diego\\Desktop\\ys_lab\\sac_sim\\reset_policy_simulation\\v4_noelastic_unchanged\\params.yaml",
+  "params_sha256": "b8b702e8cf0dfcc93b91dc97e624fa405193e7e5d3cc0e998593ba6459eff991",
+  "sim_core_sha256": "c59fcae4dbdf1196f7aa66d008888c09be481842c5e97b4eb0018e7db7aa4c5b"
+}

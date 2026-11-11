@@ -1,0 +1,12 @@
+{
+  "episodes": 50,
+  "max_steps": 400,
+  "seed": 42,
+  "batch_size": 256,
+  "warmup_steps": 5000,
+  "her_k": 4,
+  "device": "cpu",
+  "torch_threads": 1,
+  "success_threshold": 0.005,
+  "distance_scale": 10.0
+}
