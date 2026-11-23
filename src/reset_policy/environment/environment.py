@@ -242,6 +242,7 @@ class ResetPolicyEnv(gym.Env):
         
         # Apply safety filter
         safety_info = self._apply_safety_filter(action)
+        executed_action = safety_info['action'].copy()
         action = safety_info['action']
         
         # Execute action
@@ -249,11 +250,14 @@ class ResetPolicyEnv(gym.Env):
         
         if execution_result.hardware_error:
             return self._handle_hardware_error(
-                execution_result, safety_info, "action_execution"
+                execution_result, safety_info, "action_execution", executed_action
             )
         
         if not execution_result.success:
-            raise RuntimeError(execution_result.error_message)
+            # Non-hardware execution failure — treat as terminal, non-fatal
+            return self._handle_execution_failure(
+                execution_result, safety_info, executed_action
+            )
         
         # Wait for movement
         time.sleep(self.action_duration)
@@ -263,11 +267,11 @@ class ResetPolicyEnv(gym.Env):
         
         if observation_result.hardware_error:
             return self._handle_hardware_error(
-                observation_result, safety_info, "observation"
+                observation_result, safety_info, "observation", executed_action
             )
         
         if observation_result.observation is None:
-            return self._handle_observation_failure(safety_info)
+            return self._handle_observation_failure(safety_info, executed_action)
         
         observation = observation_result.observation
         self.last_valid_observation = observation
@@ -340,7 +344,7 @@ class ResetPolicyEnv(gym.Env):
             truncated = True
             termination_reason = "max_steps"
         
-        # Info dict (updated for goal-conditioned)
+        # Info dict (updated for goal-conditioned + HER-compatible)
         info = {
             "distance_to_goal": distance_to_goal,
             "goal_position": (x_goal, y_goal),
@@ -369,10 +373,76 @@ class ResetPolicyEnv(gym.Env):
             "safety_detail": safety_info['detail'],
             "safety_filtering_penalty": safety_penalty,
             "modification_magnitude": safety_info['magnitude'],
+            # === NEW FOR SAC + HER ===
+            "achieved_goal": np.array([x, y], dtype=np.float32),
+            "desired_goal": np.array([x_goal, y_goal], dtype=np.float32),
+            "executed_action": executed_action.astype(np.float32),
+            "cube_detected": True,
         }
         
         return observation.as_numpy(), reward, terminated, truncated, info
     
+    def _handle_execution_failure(self, result, safety_info, executed_action):
+        """Handle non-hardware execution failures (e.g., communication failure).
+        
+        Treated as a terminal step with a penalty, not a fatal error.
+        """
+        print(f"\n{'!'*60}")
+        print(f"EXECUTION FAILURE")
+        print(f"Message: {result.error_message}")
+        print(f"Treating as terminal step for training")
+        print(f"{'!'*60}\n")
+        
+        observation = self.last_valid_observation
+        if observation is None:
+            observation = self._create_zero_observation()
+        
+        if self.goal_position is not None:
+            x_goal, y_goal = self.goal_position
+        else:
+            x_goal, y_goal = observation.cube_x, observation.cube_y
+        
+        reward_info = self.reward_fn.compute(
+            cube_x=observation.cube_x,
+            cube_y=observation.cube_y,
+            goal_x=x_goal,
+            goal_y=y_goal,
+            motor_currents=observation.motor_currents,
+            hardware_error=False,
+        )
+        # Apply a penalty for the failure
+        reward = reward_info.total - 0.5
+        
+        info = {
+            "distance_to_goal": np.sqrt((observation.cube_x - x_goal)**2 + (observation.cube_y - y_goal)**2),
+            "goal_position": (x_goal, y_goal),
+            "cube_position": (observation.cube_x, observation.cube_y),
+            "goal_reached": False,
+            "distance_reward": reward_info.distance_reward,
+            "current_change_penalty": reward_info.current_change_penalty,
+            "hardware_error_penalty": reward_info.hardware_error_penalty,
+            "tension_penalty": reward_info.tension_penalty,
+            "max_current": max(abs(float(i)) for i in observation.motor_currents),
+            "motor_currents": observation.motor_currents.copy(),
+            "hardware_error": False,
+            "hardware_error_ids": [],
+            "hardware_error_status": {},
+            "execution_success": False,
+            "execution_error_message": result.error_message,
+            "termination_reason": "execution_failed",
+            "action_modified": safety_info['modified'],
+            "safety_reason": safety_info['reason'],
+            "safety_detail": safety_info['detail'],
+            "safety_penalty": 0.0,
+            "modification_magnitude": safety_info['magnitude'],
+            # === NEW FOR SAC + HER ===
+            "achieved_goal": np.array([observation.cube_x, observation.cube_y], dtype=np.float32),
+            "desired_goal": np.array([x_goal, y_goal], dtype=np.float32),
+            "executed_action": executed_action.astype(np.float32),
+            "cube_detected": False,
+        }
+        
+        return observation.as_numpy(), reward, True, False, info
     
     def _create_zero_observation(self):
         """Create a zero observation for error cases."""
@@ -542,7 +612,7 @@ class ResetPolicyEnv(gym.Env):
         
         return observation.as_numpy(), reward, True, False, info
     
-    def _handle_observation_failure(self, safety_info):
+    def _handle_observation_failure(self, safety_info, executed_action):
         """Handle observation failures (non-hardware)."""
         print("WARNING: Observation result is None (non-hardware failure)")
 
@@ -596,6 +666,11 @@ class ResetPolicyEnv(gym.Env):
             ),
             "safety_filtering_penalty": 0.0,                      
             "modification_magnitude": safety_info['magnitude'],
+            # === NEW FOR SAC + HER ===
+            "achieved_goal": np.array([observation.cube_x, observation.cube_y], dtype=np.float32),
+            "desired_goal": np.array([x_goal, y_goal], dtype=np.float32),
+            "executed_action": executed_action.astype(np.float32),
+            "cube_detected": False,
         }
 
         return observation.as_numpy(), reward, True, False, info
