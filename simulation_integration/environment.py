@@ -1,15 +1,10 @@
 """Stateful online adapter for the existing simulator, with no hardware imports."""
-import sys
-from pathlib import Path
 import numpy as np
 import mujoco
 from config import SIMULATOR, GOALS, TrainingConfig
 
-# Suppress bytecode writes in the read-only source simulator as well as imports.
-sys.dont_write_bytecode = True
-sys.path.insert(0, str(SIMULATOR))
-import sim_core as core
-from params import load_params
+from v4_noelastic_unchanged import sim_core as core
+from v4_noelastic_unchanged.params import load_params
 
 def normalize_goal(raw):
     return core.raw_to_norm(*np.asarray(raw)).astype(np.float32)

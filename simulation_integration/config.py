@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-SIMULATOR = ROOT.parent.parent / 'reset_policy_simulation' / 'v4_noelastic_unchanged'
+SIMULATOR = ROOT / 'v4_noelastic_unchanged'
 GOALS = ((-0.119, -0.528), (-0.296, -0.366), (-0.225, -0.427),
          (-0.365, -0.488), (-0.142, -0.347))
 
