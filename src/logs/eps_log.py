@@ -1,15 +1,18 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import os
+out_dir = "/home/madhoolika/workspace/reset_policy/src/logs"
+os.makedirs(out_dir, exist_ok=True)
 
 # Load your CSV
 df = pd.read_csv("episodes.csv")
 
 # Preset goals
 goals = [
-#     (-0.296, -0.366),
-#     (-0.225, -0.427),
-#     (-0.365, -0.488),
-#     (-0.142, -0.347),
+    (-0.296, -0.366),
+    (-0.225, -0.427),
+    (-0.365, -0.488),
+    (-0.142, -0.347),
     (-0.119, -0.528),
 ]
 
@@ -80,3 +83,6 @@ fig3.tight_layout()
 
 
 plt.show()
+fig1.savefig(os.path.join(out_dir, "final_distance_to_goal.png"), dpi=150, bbox_inches="tight")
+fig2.savefig(os.path.join(out_dir, "total_reward.png"), dpi=150, bbox_inches="tight")
+fig3.savefig(os.path.join(out_dir, "distance_reward_sum.png"), dpi=150, bbox_inches="tight")

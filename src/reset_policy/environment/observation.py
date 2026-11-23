@@ -25,7 +25,7 @@ from control.dynamixel_executor import DynamixelExecutor
 from config import config
 
 # Normalization constants (aligned with config)
-CURRENT_LIMIT = config.dynamixel.max_encoder_travel / 5.71  # ~1750mA
+CURRENT_LIMIT = config.dynamixel.current_limit_mA
 MAX_POSITION_DELTA = config.safety.max_position  # 8000 ticks
 TENSION_LIMIT = config.safety.max_pair_current * 2  # 1600mA
 

@@ -3,7 +3,7 @@
 """
 Simple script to remotely control a single motor.
 Uses the exact same communication method as the RL policy.
-Usage: python control_motor.py --motor 16 --steps 100 --direction pull
+Usage: python spool_control.py --motor 16 --steps 100 --direction pull
 """
 
 import sys
