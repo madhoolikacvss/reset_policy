@@ -1,11 +1,14 @@
 """Simulation-only configuration; importing this creates no directories."""
 from dataclasses import dataclass
 from pathlib import Path
+from v4_noelastic_unchanged.params import BOARD
 
 ROOT = Path(__file__).resolve().parent
 SIMULATOR = ROOT / 'v4_noelastic_unchanged'
-GOALS = ((-0.119, -0.528), (-0.296, -0.366), (-0.225, -0.427),
-         (-0.365, -0.488), (-0.142, -0.347))
+# Raw-coordinate bounds match src/reset_policy/config.py:
+# x in [-0.50, -0.07], y in [-0.71, -0.12] metres.
+GOAL_LOW = (BOARD.x_min, BOARD.y_min)
+GOAL_HIGH = (BOARD.x_max, BOARD.y_max)
 
 @dataclass
 class TrainingConfig:

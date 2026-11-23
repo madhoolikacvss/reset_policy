@@ -1,7 +1,7 @@
 """Stateful online adapter for the existing simulator, with no hardware imports."""
 import numpy as np
 import mujoco
-from config import SIMULATOR, GOALS, TrainingConfig
+from config import SIMULATOR, GOAL_LOW, GOAL_HIGH, TrainingConfig
 
 from v4_noelastic_unchanged import sim_core as core
 from v4_noelastic_unchanged.params import load_params
@@ -82,8 +82,9 @@ class ResetPolicyEnv:
         if seed is not None:
             self.rng = np.random.default_rng(seed)
         options = options or {}
-        episode = options.get('episode_num', 1)
-        self.goal_position = np.asarray(options.get('goal', GOALS[(episode - 1) % len(GOALS)]), dtype=float)
+        # Sample x and y independently, uniformly over the full board each episode.
+        self.goal_position = (np.asarray(options['goal'], dtype=float) if 'goal' in options
+                              else self.rng.uniform(GOAL_LOW, GOAL_HIGH))
         # Independent interior starts; no logged trajectories or future observations.
         self.sim.reset(options.get('start_norm', self.rng.uniform(0.15, 0.85, 2)))
         self.step_count = 0
