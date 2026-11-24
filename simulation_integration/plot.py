@@ -4,7 +4,7 @@ import re
 import pandas as pd
 import matplotlib.pyplot as plt
 
-folder = r"C:\Users\madho\OneDrive - UC San Diego\Desktop\ys_lab\sac_sim\reset_policy\simulation_integration\runs\v4_noelastic_unchanged_50ep\src\logs\sac\motor_logs_sac"
+folder = "/home/madhoolika/workspace/reset_policy/simulation_integration/runs/uniform_goal_5000/src/logs/sac/motor_logs_sac"
 out_dir = os.path.join(folder, "../plots")
 os.makedirs(out_dir, exist_ok=True)
 

@@ -8,7 +8,7 @@ from train_sac import train
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--episodes', type=int, default=500)
+    parser.add_argument('--episodes', type=int, default=5000)
     parser.add_argument('--max-steps', type=int, default=400)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--warmup-steps', type=int, default=5000)
