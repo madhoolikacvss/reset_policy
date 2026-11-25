@@ -338,7 +338,10 @@ class SACAgent:
     # ---------------- Persistence ----------------
 
     def save(self, path: str) -> None:
-        torch.save({
+        torch.save(self.state_dict(), path)
+
+    def state_dict(self) -> dict:
+        return {
             "actor": self.actor.state_dict(),
             "q1": self.q1.state_dict(),
             "q2": self.q2.state_dict(),
@@ -350,7 +353,7 @@ class SACAgent:
             "q2_opt": self.q2_opt.state_dict(),
             "alpha_opt": self.alpha_opt.state_dict(),
             "update_step": self._update_step,
-        }, path)
+        }
 
     def load(self, path: str) -> None:
         ckpt = torch.load(path, map_location=self.device)

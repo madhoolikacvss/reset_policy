@@ -3,7 +3,6 @@ import hashlib
 import json
 import time
 from dataclasses import asdict
-from pathlib import Path
 import numpy as np
 import torch
 from config import ROOT, SIMULATOR
@@ -21,6 +20,10 @@ def train(cfg, run_name):
     run.mkdir(parents=True, exist_ok=False)
     ckpts = run / 'checkpoints' / 'sac'
     ckpts.mkdir(parents=True)
+    agent_path = ckpts / 'sac_latest.pt'
+    buffer_path = ckpts / 'buffer_latest.npz'
+    pending_agent = ckpts / 'sac_latest.tmp.pt'
+    pending_buffer = ckpts / 'buffer_latest.tmp.npz'
     (run / 'config.json').write_text(json.dumps(asdict(cfg), indent=2))
     source_params = SIMULATOR / 'params.yaml'
     source_sim_core = SIMULATOR / 'sim_core.py'
@@ -80,17 +83,6 @@ def train(cfg, run_name):
                 if terminated or truncated:
                     break
             relabeled = her.finalize_episode()
-            # Save the same model/optimizer payload as the original training script.
-            agent_path = ckpts / 'sac_latest.pt'
-            pending_agent = ckpts / 'sac_latest.tmp.pt'
-            pending_buffer = ckpts / 'buffer_latest.tmp.npz'
-            agent.save(str(pending_agent))
-            payload = torch.load(pending_agent, weights_only=False)
-            torch.save({'agent': payload, 'global_step': global_step, 'episode': episode-1,
-                        'sac_config': asdict(agent.cfg), 'training_config': asdict(cfg)}, pending_agent)
-            base.save(pending_buffer)
-            pending_buffer.replace(ckpts / 'buffer_latest.npz')
-            pending_agent.replace(agent_path)
             elapsed = time.perf_counter()-start
             def mean_loss(key):
                 values = [x[key] for x in losses if np.isfinite(x[key])]
@@ -112,6 +104,12 @@ def train(cfg, run_name):
             timings.append(timing)
             with (run / 'timings.jsonl').open('a') as f:
                 f.write(json.dumps(timing)+'\n')
+            # Replace the previous snapshot after the episode and its logs are complete.
+            torch.save({'agent': agent.state_dict(), 'global_step': global_step, 'episode': episode-1,
+                        'sac_config': asdict(agent.cfg), 'training_config': asdict(cfg)}, pending_agent)
+            base.save(pending_buffer)
+            pending_buffer.replace(buffer_path)
+            pending_agent.replace(agent_path)
             print(f'Episode {episode:02}/{cfg.episodes}: steps={step}, return={total_reward:.2f}, '
                   f'distance={info["distance_to_goal"]:.4f}m, success={terminated}, '
                   f'time={elapsed:.2f}s, updates={agent._update_step}', flush=True)
@@ -123,4 +121,6 @@ def train(cfg, run_name):
         print(json.dumps(summary), flush=True)
     finally:
         logger.close()
+        pending_agent.unlink(missing_ok=True)
+        pending_buffer.unlink(missing_ok=True)
     return run
