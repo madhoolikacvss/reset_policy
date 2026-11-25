@@ -134,7 +134,6 @@ def train(env, config=config):
     warmup_steps = 5000
     updates_per_step = 1
     log_every = 10
-    save_every = config.training.save_every
     render_every = config.training.render_every
 
     # --- Video recorder (same as PPO) ---
@@ -392,28 +391,31 @@ def train(env, config=config):
             )
 
         # --- Checkpoint ---
-        if (episode + 1) % save_every == 0:
-            ckpt_path = ckpt_dir / f"sac_ckpt_{episode + 1}.pt"
-            torch.save({
-                "agent": {
-                    "actor": agent.actor.state_dict(),
-                    "q1": agent.q1.state_dict(),
-                    "q2": agent.q2.state_dict(),
-                    "q1_target": agent.q1_target.state_dict(),
-                    "q2_target": agent.q2_target.state_dict(),
-                    "log_alpha": agent.log_alpha.detach().cpu(),
-                    "actor_opt": agent.actor_opt.state_dict(),
-                    "q1_opt": agent.q1_opt.state_dict(),
-                    "q2_opt": agent.q2_opt.state_dict(),
-                    "alpha_opt": agent.alpha_opt.state_dict(),
-                    "update_step": agent._update_step,
-                },
-                "global_step": global_step,
-                "episode": episode,
-            }, ckpt_path)
+        ckpt_path = ckpt_dir / "sac_latest.pt"
+        pending_agent = ckpt_dir / "sac_latest.tmp.pt"
+        pending_buffer = ckpt_dir / "buffer_latest.tmp.npz"
+        torch.save({
+            "agent": {
+                "actor": agent.actor.state_dict(),
+                "q1": agent.q1.state_dict(),
+                "q2": agent.q2.state_dict(),
+                "q1_target": agent.q1_target.state_dict(),
+                "q2_target": agent.q2_target.state_dict(),
+                "log_alpha": agent.log_alpha.detach().cpu(),
+                "actor_opt": agent.actor_opt.state_dict(),
+                "q1_opt": agent.q1_opt.state_dict(),
+                "q2_opt": agent.q2_opt.state_dict(),
+                "alpha_opt": agent.alpha_opt.state_dict(),
+                "update_step": agent._update_step,
+            },
+            "global_step": global_step,
+            "episode": episode,
+        }, pending_agent)
 
-            her_buffer.save(ckpt_dir / f"buffer_ckpt_{episode + 1}.npz")
-            print(f"  >> saved checkpoint to {ckpt_path}")
+        her_buffer.save(pending_buffer)
+        pending_buffer.replace(ckpt_dir / "buffer_latest.npz")
+        pending_agent.replace(ckpt_path)
+        print(f"  >> saved checkpoint to {ckpt_path}")
 
         # --- Hardware error: stop cleanly ---
         if hardware_error:
@@ -427,30 +429,6 @@ def train(env, config=config):
     if video_recorder is not None:
         video_recorder.close()
         print("[VIDEO] Video recorder closed")
-
-    final_agent_path = ckpt_dir / "sac_final.pt"
-    torch.save({
-        "agent": {
-            "actor": agent.actor.state_dict(),
-            "q1": agent.q1.state_dict(),
-            "q2": agent.q2.state_dict(),
-            "q1_target": agent.q1_target.state_dict(),
-            "q2_target": agent.q2_target.state_dict(),
-            "log_alpha": agent.log_alpha.detach().cpu(),
-            "actor_opt": agent.actor_opt.state_dict(),
-            "q1_opt": agent.q1_opt.state_dict(),
-            "q2_opt": agent.q2_opt.state_dict(),
-            "alpha_opt": agent.alpha_opt.state_dict(),
-            "update_step": agent._update_step,
-        },
-        "global_step": global_step,
-        "episode": episode,
-    }, final_agent_path)
-    print(f"Saved final checkpoint: {final_agent_path}")
-
-    final_buffer_path = ckpt_dir / "buffer_final.npz"
-    her_buffer.save(final_buffer_path)
-    print(f"Saved final buffer: {final_buffer_path}")
 
     logger.close()
     print("Training complete.")
