@@ -21,4 +21,4 @@ class TrainingConfig:
     device: str = 'cpu'
     torch_threads: int = 1
     success_threshold: float = 0.005
-    distance_scale: float = 10.0  # Scale raw distance in metres by 1 / 0.1 m.
+    distance_scale: float = 50.0  # Inverse of the 0.02 m scale in the log reward.
