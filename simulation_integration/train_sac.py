@@ -81,12 +81,16 @@ def train(cfg, run_name):
                     break
             relabeled = her.finalize_episode()
             # Save the same model/optimizer payload as the original training script.
-            agent_path = ckpts / f'sac_ckpt_{episode}.pt'
-            agent.save(str(agent_path))
-            payload = torch.load(agent_path, weights_only=False)
+            agent_path = ckpts / 'sac_latest.pt'
+            pending_agent = ckpts / 'sac_latest.tmp.pt'
+            pending_buffer = ckpts / 'buffer_latest.tmp.npz'
+            agent.save(str(pending_agent))
+            payload = torch.load(pending_agent, weights_only=False)
             torch.save({'agent': payload, 'global_step': global_step, 'episode': episode-1,
-                        'sac_config': asdict(agent.cfg), 'training_config': asdict(cfg)}, agent_path)
-            base.save(ckpts / f'buffer_ckpt_{episode}.npz')
+                        'sac_config': asdict(agent.cfg), 'training_config': asdict(cfg)}, pending_agent)
+            base.save(pending_buffer)
+            pending_buffer.replace(ckpts / 'buffer_latest.npz')
+            pending_agent.replace(agent_path)
             elapsed = time.perf_counter()-start
             def mean_loss(key):
                 values = [x[key] for x in losses if np.isfinite(x[key])]
@@ -111,9 +115,6 @@ def train(cfg, run_name):
             print(f'Episode {episode:02}/{cfg.episodes}: steps={step}, return={total_reward:.2f}, '
                   f'distance={info["distance_to_goal"]:.4f}m, success={terminated}, '
                   f'time={elapsed:.2f}s, updates={agent._update_step}', flush=True)
-        import shutil
-        shutil.copyfile(agent_path, ckpts / 'sac_final.pt')
-        shutil.copyfile(ckpts / f'buffer_ckpt_{cfg.episodes}.npz', ckpts / 'buffer_final.npz')
         summary = dict(episodes=len(timings), steps=global_step, updates=agent._update_step,
                        wall_time_s=time.perf_counter()-run_start,
                        successes=sum(t['success'] for t in timings),

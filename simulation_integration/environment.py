@@ -12,8 +12,8 @@ def normalize_goal(raw):
 def distance_reward(achieved, desired, cfg):
     distance = float(np.linalg.norm(np.asarray(achieved) - np.asarray(desired)))
     success = distance < cfg.success_threshold
-    # Match actual hardware env: exponential distance plus distance-based success bonus.
-    return float(np.exp(-cfg.distance_scale * distance)) + float(success), success
+    # A successful transition ends the episode with zero reward.
+    return (0.0 if success else float(np.expm1(-cfg.distance_scale * distance))), success
 
 class SimulatorAdapter:
     """Same MuJoCo substep sequence as sim_core._simulate_force, kept alive per episode."""
@@ -102,7 +102,7 @@ class ResetPolicyEnv:
         info = dict(cube_position=raw, goal_position=self.goal_position.copy(),
                     distance_to_goal=float(np.linalg.norm(raw-self.goal_position)),
                     goal_reached=success, total_reward=reward,
-                    distance_reward=reward-float(success), executed_actions=action.copy(),
+                    distance_reward=reward, executed_actions=action.copy(),
                     current_change_penalty=0., hardware_error_penalty=0., tension_penalty=0.,
                     safety_filtering_penalty=0., action_modified=False, hardware_error=False,
                     off_board=hit, termination_reason='goal_reached' if success else 'max_steps' if truncated else '')
