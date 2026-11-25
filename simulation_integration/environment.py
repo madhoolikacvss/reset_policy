@@ -13,7 +13,7 @@ def distance_reward(achieved, desired, cfg):
     distance = float(np.linalg.norm(np.asarray(achieved) - np.asarray(desired)))
     success = distance < cfg.success_threshold
     # A successful transition ends the episode with zero reward.
-    return (0.0 if success else float(np.expm1(-cfg.distance_scale * distance))), success
+    return (0.0 if success else -cfg.distance_scale * distance), success
 
 class SimulatorAdapter:
     """Same MuJoCo substep sequence as sim_core._simulate_force, kept alive per episode."""
