@@ -1,0 +1,7 @@
+{
+  "simulator": "v4_noelastic_unchanged",
+  "simulator_directory": "/home/madhoolika/workspace/reset_policy/simulation_integration/v4_noelastic_unchanged",
+  "source_params": "/home/madhoolika/workspace/reset_policy/simulation_integration/v4_noelastic_unchanged/params.yaml",
+  "params_sha256": "b8b702e8cf0dfcc93b91dc97e624fa405193e7e5d3cc0e998593ba6459eff991",
+  "sim_core_sha256": "fe2e8ec74928a555141532b41a03cfd94a81a081611d4d4503ed9bd6f10b12c5"
+}
