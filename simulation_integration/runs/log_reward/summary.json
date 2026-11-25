@@ -1,0 +1,9 @@
+{
+  "episodes": 500,
+  "steps": 140909,
+  "updates": 135909,
+  "wall_time_s": 3637.10776449088,
+  "successes": 171,
+  "off_board_rows": 0,
+  "buffer_size": 702545
+}
